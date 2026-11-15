@@ -11,6 +11,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
 /* ================= renderer / scene ================= */
@@ -74,19 +75,6 @@ const dotTex = canvasTex(64, (g,s) => {
   gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.35,'rgba(255,255,255,.55)'); gr.addColorStop(1,'rgba(255,255,255,0)');
   g.fillStyle = gr; g.fillRect(0,0,s,s);
 });
-const floorTex = canvasTex(512, (g,s) => {
-  g.fillStyle = '#2b3042'; g.fillRect(0,0,s,s);
-  const n = 8, w = s/n;
-  for (let y=0;y<n;y++) for (let x=0;x<n;x++){
-    const off = (y%2)*w/2, v = 38 + Math.random()*22;
-    g.fillStyle = `rgb(${v},${v+4},${v+18})`;
-    g.fillRect(x*w+off+3, y*w+3, w-6, w-6);
-    g.fillRect(x*w+off+3-s, y*w+3, w-6, w-6);
-    for (let k=0;k<30;k++){ g.fillStyle=`rgba(255,255,255,${Math.random()*.04})`; g.fillRect(x*w+off+Math.random()*w, y*w+Math.random()*w, 2, 2); }
-  }
-});
-floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(7,7);
-floorTex.anisotropy = 4;
 const runeTex = canvasTex(1024, (g,s) => {
   g.translate(s/2,s/2); g.strokeStyle = '#fff'; g.lineCap='round';
   const ring = (r,w)=>{ g.lineWidth=w; g.beginPath(); g.arc(0,0,r,0,Math.PI*2); g.stroke(); };
@@ -100,6 +88,21 @@ const runeTex = canvasTex(1024, (g,s) => {
   g.lineWidth=3; // hexagram
   for (let t=0;t<2;t++){ g.beginPath(); for(let i=0;i<=3;i++){ const a=i/3*Math.PI*2+t*Math.PI/3-Math.PI/2; g.lineTo(Math.cos(a)*300,Math.sin(a)*300);} g.stroke(); }
 });
+
+/* ================= photo-scanned materials (Poly Haven, CC0) =================
+   Each material = colour (diff) + surface bumps (nor_gl) + one packed map "arm":
+   R = ambient occlusion, G = roughness, B = metalness. One texture feeds three slots, which saves memory on iPhone. */
+const texLoader = new THREE.TextureLoader();
+function pbrMaps(name, rx, ry){
+  const ld = (kind, srgb=false) => {
+    const t = texLoader.load(`${import.meta.env.BASE_URL}textures/${name}_${kind}_1k.jpg`);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 4;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  const arm = ld('arm');
+  return { map:ld('diff', true), normalMap:ld('nor_gl'), aoMap:arm, roughnessMap:arm };
+}
 
 /* ================= environment ================= */
 const sky = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), new THREE.ShaderMaterial({
@@ -127,6 +130,12 @@ moon.position.set(-55,48,-90); sky.add(moon);
   const blob = (c,x,y,z,r) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r,16,8), new THREE.MeshBasicMaterial({color:c})); m.position.set(x,y,z); envScene.add(m); };
   blob(new THREE.Color(8,8,9),-20,24,-32,4); blob(new THREE.Color(.6,2.6,4),32,6,0,7); blob(new THREE.Color(3.2,.9,4),-30,6,12,7);
   scene.environment = pmrem.fromScene(envScene, .04).texture;
+  // swap in a real photographed night sky (moonrise) for image-based lighting once it has loaded
+  new RGBELoader().load(`${import.meta.env.BASE_URL}hdri/qwantani_moonrise_puresky_1k.hdr`, hdr => {
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    scene.environment = pmrem.fromEquirectangular(hdr).texture;
+    hdr.dispose(); pmrem.dispose();
+  });
 }
 
 scene.add(new THREE.HemisphereLight(0x7088ff, 0x20101c, 0.7));
@@ -139,7 +148,9 @@ scene.add(moonLight, moonLight.target);
 
 
 const floor = new THREE.Mesh(new THREE.CircleGeometry(ARENA+8, 72),
-  new THREE.MeshStandardMaterial({map:floorTex, color:0x8c94ae, roughness:0.32, metalness:0.45}));
+  // stone paving: slightly damp (roughness scaled down) so the crystals and moon still glint on it
+  new THREE.MeshStandardMaterial({...pbrMaps('stone_tiles_02', 16, 16), color:0x6b7494, roughness:.85, metalness:0,
+    normalScale:new THREE.Vector2(1.2,1.2), envMapIntensity:.3})); // the sky HDR is bright: keep the night mood
 floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
 
 const runeMat = new THREE.MeshBasicMaterial({map:runeTex, color:new THREE.Color(0.25,0.9,1.4), transparent:true, opacity:.4,
@@ -150,16 +161,16 @@ const edge = new THREE.Mesh(new THREE.RingGeometry(ARENA+0.2, ARENA+0.5, 128),
   new THREE.MeshBasicMaterial({color:new THREE.Color(0.3,1.2,2.0), transparent:true, opacity:.7, blending:THREE.AdditiveBlending, depthWrite:false}));
 edge.rotation.x = -Math.PI/2; edge.position.y = 0.03; scene.add(edge);
 
-const stoneMat = new THREE.MeshStandardMaterial({color:0x3a3f55, roughness:.75, metalness:.15, flatShading:true});
+const stoneMat = new THREE.MeshStandardMaterial({...pbrMaps('castle_wall_slates', 2, 3), color:0x8a90a8, roughness:1, metalness:0, envMapIntensity:.45});
 const crystalMats = [new THREE.Color(0x57e1ff), new THREE.Color(0xc070ff)].map(c =>
   new THREE.MeshStandardMaterial({color:0x111122, emissive:c, emissiveIntensity:2.4, roughness:.2, metalness:.6, flatShading:true}));
 const crystals = [];
 for (let i=0;i<10;i++){
   const a = i/10*Math.PI*2 + 0.15, r = ARENA + 4.5;
   const h = 3 + Math.random()*5;
-  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9,1.1,h,7), stoneMat);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9,1.1,h,20), stoneMat);
   col.position.set(Math.sin(a)*r, h/2, Math.cos(a)*r); col.castShadow = true; col.receiveShadow = true; scene.add(col);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.0,0.4,7), stoneMat); cap.position.set(col.position.x,h+0.2,col.position.z); scene.add(cap);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.0,0.4,20), stoneMat); cap.position.set(col.position.x,h+0.2,col.position.z); scene.add(cap);
   const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.6,0), crystalMats[i%2]);
   cr.position.set(col.position.x, h+1.6, col.position.z); cr.scale.y = 1.6; scene.add(cr);
   crystals.push({m:cr, base:h+1.6, ph:Math.random()*6});

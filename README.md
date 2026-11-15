@@ -41,6 +41,8 @@ src/story/scenes.ts   第1章の会話シナリオ
 src/audio.ts          効果音（Web Audioで合成）
 src/style.css         UIスタイル
 public/models/*.vrm   キャラクターモデル
+public/textures/      床・石柱の写真スキャン素材（Poly Haven）
+public/hdri/          ライティング用の夜空HDR（Poly Haven）
 ```
 
 ## クレジット
@@ -48,3 +50,5 @@ public/models/*.vrm   キャラクターモデル
 - 3Dモデル「Vita」（ルミナ役）「Victoria Rubin」（シエル役）: VRoid Project / pixiv Inc. — **CC0**
   （VRoid Studio β版サンプルモデル。テクスチャを1024pxに縮小して使用）
 - [three.js](https://threejs.org/) (MIT), [@pixiv/three-vrm](https://github.com/pixiv/three-vrm) (MIT)
+- テクスチャ「Stone Tiles 02」「Castle Wall Slates」、HDRI「Qwantani Moonrise (Pure Sky)」: [Poly Haven](https://polyhaven.com/) — **CC0**
+  （1k解像度のJPG / HDRを使用）
