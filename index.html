@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>LUMEN BLADE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Noto+Sans+JP:wght@300;500;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="game"></div>
@@ -44,26 +44,37 @@
 </div>
 
 <div class="ov" id="startOv">
-  <div class="ver">v0.2.0</div>
-  <div class="head">
-    <div class="logo">LUMEN<br>BLADE</div>
-    <div class="sub">— 3D ACTION PROTOTYPE —</div>
-    <div class="btnrow">
-      <button class="btn" id="startBtn" disabled>LOADING…</button>
-      <button class="btn sub" id="endlessBtn" disabled>○ エンドレス</button>
+  <div class="tl-logo">
+    <div class="tl-main">LUMEN</div>
+    <div class="tl-blade"><i></i><span>BLADE</span><i></i></div>
+    <div class="tl-sub">3D ACTION PROTOTYPE</div>
+  </div>
+  <div class="tl-menu">
+    <div class="tl-load" id="tlLoad"><span id="tlLoadText">NOW LOADING</span><div class="tl-loadbar"><i id="tlLoadFill"></i></div></div>
+    <button class="tl-item main" id="startBtn" disabled><span class="k">✕</span><span class="l">ストーリー</span><span class="e">STORY</span></button>
+    <button class="tl-item" id="endlessBtn" disabled><span class="k">○</span><span class="l">エンドレス</span><span class="e">ENDLESS</span></button>
+    <button class="tl-item" id="ctrlBtn"><span class="k">△</span><span class="l">操作方法</span><span class="e">CONTROLS</span></button>
+  </div>
+  <div class="tl-foot">
+    <div class="note" id="padNote">PS5コントローラーをBluetoothでiPhoneに接続して、どれかボタンを押すと認識されます。<br>
+      認識しないときは、このページをSafariで直接開いてみてね。コントローラーがなくても画面タッチで遊べます。</div>
+    <div class="ver">v0.2.0</div>
+  </div>
+  <div class="tl-ctrl" id="ctrlPanel">
+    <div class="tl-ctrl-in">
+      <div class="tl-ctrl-h">CONTROLS<small>操作方法</small></div>
+      <div class="controls">
+        <span>左スティック</span><span>移動</span>
+        <span>右スティック</span><span>カメラ</span>
+        <b>□</b><span>攻撃（連打で3段コンボ）</span>
+        <b>✕</b><span>ジャンプ</span>
+        <b>○</b><span>回避（ギリギリで JUST DODGE）</span>
+        <b>△</b><span>必殺技（ゲージMAX時）</span>
+        <b>R3 / L1</b><span>ロックオン（右スティックで切替）</span>
+      </div>
+      <div class="tl-ctrl-close">○ / △ / タップで閉じる</div>
     </div>
   </div>
-  <div class="controls">
-    <span>左スティック</span><span>移動</span>
-    <span>右スティック</span><span>カメラ</span>
-    <b>□</b><span>攻撃（連打で3段コンボ）</span>
-    <b>✕</b><span>ジャンプ</span>
-    <b>○</b><span>回避（ギリギリで JUST DODGE）</span>
-    <b>△</b><span>必殺技（ゲージMAX時）</span>
-    <b>R3 / L1</b><span>ロックオン（右スティックで切替）</span>
-  </div>
-  <div class="note" id="padNote">PS5コントローラーをBluetoothでiPhoneに接続して、どれかボタンを押すと認識されます。<br>
-    認識しないときは、このページをSafariで直接開いてみてね。コントローラーがなくても画面タッチで遊べます。</div>
 </div>
 
 <div class="ov hide" id="overOv">

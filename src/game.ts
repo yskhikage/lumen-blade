@@ -324,9 +324,11 @@ NPC.root.position.set(0,0,-14.0); scene.add(NPC.root); scene.add(NPC.look);
   const al = new THREE.PointLight(0x7fe8ff, 3, 7, 2); al.position.set(0,3.4,-16.8); scene.add(al);
 }
 {
+  // title loader: thin progress line under the menu (2 VRM models)
   const btn = document.getElementById('startBtn'), btn2 = document.getElementById('endlessBtn');
-  btn.textContent = 'LOADING… 0/2'; let done = 0;
-  const tick = () => { done++; btn.textContent = `LOADING… ${done}/2`; };
+  const loadText = document.getElementById('tlLoadText'), loadFill = document.getElementById('tlLoadFill');
+  let done = 0;
+  const tick = () => { done++; loadFill.style.width = (done/2*100)+'%'; };
   Promise.all([
     loadVRM(`${import.meta.env.BASE_URL}models/lumina.vrm`).then(r => { tick(); return r; }),
     loadVRM(`${import.meta.env.BASE_URL}models/ciel.vrm`).then(r => { tick(); return r; })
@@ -347,8 +349,9 @@ NPC.root.position.set(0,0,-14.0); scene.add(NPC.root); scene.add(NPC.look);
     rimVRM(C.vrm, 1.3,.75,1.0); NPC.root.add(C.vrm.scene);
     if (C.vrm.lookAt) C.vrm.lookAt.target = NPC.look;
     heroReady = true;
-    btn.disabled = false; btn.textContent = '✕ ストーリー'; btn2.disabled = false;
-  }).catch(err => { btn.textContent = 'モデルの読み込みに失敗しました'; console.error(err); });
+    btn.disabled = false; btn2.disabled = false;
+    document.getElementById('startOv').classList.add('ready');
+  }).catch(err => { loadText.textContent = 'モデルの読み込みに失敗しました'; console.error(err); });
 }
 
 /* ================= camera ================= */
@@ -1283,6 +1286,7 @@ function startGame(m='story', fromStep=0){
   } else emit(new THREE.Vector3(0,.5,0), new THREE.Color(.7,1.8,2.6), 80, 6, 1, 4, .5, 3);
 }
 function toTitle(){
+  setCtrlPanel(false);
   running = false; overShown = false; resetGame(); setObjective(null);
   ['overOv','pauseOv','endOv'].forEach(id => $(id).classList.add('hide'));
   $('startOv').classList.remove('hide'); $('hud').classList.remove('on');
@@ -1296,6 +1300,11 @@ let overAt = 0;
 function setPause(v){ paused = v; $('pauseOv').classList.toggle('hide', !v); }
 $('startBtn').addEventListener('click', () => startGame('story'));
 $('endlessBtn').addEventListener('click', () => startGame('endless'));
+// title "controls" panel: opened from the menu (or △), closed by tapping anywhere (or ○ / △)
+const setCtrlPanel = v => $('startOv').classList.toggle('ctrl-open', v);
+const ctrlOpen = () => $('startOv').classList.contains('ctrl-open');
+$('ctrlBtn').addEventListener('click', () => setCtrlPanel(true));
+$('ctrlPanel').addEventListener('click', () => setCtrlPanel(false));
 const retry = () => startGame(mode, mode==='story' ? storyStep : 0);
 $('retryBtn').addEventListener('click', retry);
 $('titleBtn').addEventListener('click', toTitle);
@@ -1359,7 +1368,9 @@ function loop(){
     const endOn = !$('endOv').classList.contains('hide');
     if (endOn){
       if (performance.now()-overAt > 900){ if (inp.jump || inp.attack) toTitle(); else if (inp.dodge) startGame('endless'); }
-    } else if (heroReady){ if (inp.jump || inp.attack) startGame('story'); else if (inp.dodge) startGame('endless'); }
+    } else if (ctrlOpen()){ if (inp.dodge || inp.special) setCtrlPanel(false); }
+    else if (inp.special) setCtrlPanel(true);
+    else if (heroReady){ if (inp.jump || inp.attack) startGame('story'); else if (inp.dodge) startGame('endless'); }
     const a = now*.12; camera.position.set(Math.sin(a)*4.2, 1.6, -11.8 + Math.cos(a)*4.2); camera.lookAt(0,1.1,-12.6);
     hero.pos.set(0,0,-11.8); H.root.rotation.y = Math.PI; animateHero(dt, now); updateTrail();
     sky.position.copy(camera.position); updateParticles(dt); composer.render(); return;
