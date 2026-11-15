@@ -835,7 +835,7 @@ function updateHero(dt, inp, now){
   const fwd = new THREE.Vector3(Math.sin(h.facing),0,Math.cos(h.facing));
 
   if (h.state==='free'){
-    const sp = 6.8*mag;
+    const sp = (isStrolling() ? 2.6 : 6.8)*mag;   // ストーリーの歩くパートでは走らず、ゆっくり歩く
     h.vel.x = THREE.MathUtils.damp(h.vel.x, move.x*sp, 14, dt);
     h.vel.z = THREE.MathUtils.damp(h.vel.z, move.z*sp, 14, dt);
     if (mag > .1) h.facing = lerpAngle(h.facing, Math.atan2(move.x, move.z), Math.min(1, dt*14));
@@ -1243,26 +1243,53 @@ let mode = 'story', storyStep = 0, storyWave = 0, storyWaveT = 0, stepT = 0, pla
 const ep1Reset = () => { hero.pos.set(0,0,-11.4); hero.facing = Math.PI; };
 const STORY = [
   {scene:'ep1_dawn', setup:ep1Reset},                 // ① 夜明け
-  {scene:'ep1_hush'},                                 // ③ 最初の沈黙（② 歩くパートは次のステップで追加）
+  // ② 祈りの台座へ（操作パート）：広場の反対側から、神官と台座の前まで歩く
+  {walk:{x:0, z:-12, r:1.8}, obj:'祈りの台座へ向かう', setup:() => { hero.pos.set(0,0,8); hero.facing = Math.PI; },
+    barks:[[1,'巫女さま、今年も麦が実りますように'], [3.6,'風の声を、聞かせてください'], [6.2,'エルフィナさまがいれば安心だ']]},
+  {scene:'ep1_hush', setup:ep1Reset},                 // ③ 最初の沈黙
   {scene:'ep1_unrest'},                               // ④ 異変
   {battle:[['golem','golem'], ['golem','golem','caster'], ['golem','caster','caster','golem']], obj:'広場に現れた影を祓え'},
   {scene:'ep1_heresy', setup:() => { for (const e of [...enemies]) removeEnemy(e); ep1Reset(); }},  // ⑤ 異端
-  {scene:'ep1_farewell'},                             // ⑥ 別れ（⑦ 去るパートは次のステップで追加）
+  {scene:'ep1_farewell'},                             // ⑥ 別れ
+  // ⑦ 聖都を去る（操作パート）：台座に背を向け、広場の外れ（門に見立てた場所）まで歩く
+  {walk:{x:0, z:16, r:1.8}, obj:'聖都を去る', setup:() => { hero.pos.set(0,0,-8); hero.facing = 0; },  // 神官がカメラを塞がないよう少し前から
+    barks:[[4,'……異端だ']]},
   {scene:'ep1_departure'},                            // ⑧ ラスト
   {end:true}
 ];
 const objEl = $('objective');
+const isStrolling = () => mode==='story' && running && !!(STORY[storyStep] && STORY[storyStep].walk);
+// 歩くパートの目的地を示す、床の光の輪
+const walkMarkMat = new THREE.MeshBasicMaterial({color:new THREE.Color(.5,1.4,2.2), transparent:true, opacity:.6,
+  blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide});
+const walkMark = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.35, 64), walkMarkMat);
+walkMark.rotation.x = -Math.PI/2; walkMark.visible = false; scene.add(walkMark);
 function setObjective(t){ if (t){ objEl.innerHTML = `◆ ${t}`; objEl.classList.add('on'); } else objEl.classList.remove('on'); }
 function runStep(){
   const S = STORY[storyStep]; stepT = 0;
   if (!S) return;
   if (S.scene){ setObjective(null); startScene(S.scene, () => { storyStep++; runStep(); }, S.setup); }
   else if (S.battle){ storyWave = 0; storyWaveT = 1.2; setObjective(S.obj); bark('なんだ、あれは……！', NAMES.people); }
+  else if (S.walk){
+    // 歩くパート：目的地に光の輪を出し、カメラをエルフィナの背後に戻す
+    if (S.setup) S.setup();
+    camYaw = Math.atan2(-Math.sin(hero.facing), -Math.cos(hero.facing)); camPitch = .24; camTarget.set(hero.pos.x, 1.2, hero.pos.z);
+    S.barkI = 0; setObjective(S.obj);
+    walkMark.position.set(S.walk.x, .04, S.walk.z); walkMark.visible = true;
+  }
   else if (S.boss){ S.downT = 0; setObjective(S.obj); banner('BOSS','穢れし守護者 ゴーレム・ロード'); bark('守護者の大技は、足元の赤い円を見て避けて！'); }
   else if (S.end){ showEnd(); }
 }
 function updateStory(dt){
   const S = STORY[storyStep]; if (!S || cine) return; stepT += dt;
+  if (S.walk){
+    // 決まった時間に民の声を出し、目的地に着いたら次へ
+    const b = S.barks && S.barks[S.barkI];
+    if (b && stepT >= b[0]){ bark(b[1], NAMES.people); S.barkI++; }
+    walkMark.scale.setScalar(1 + Math.sin(stepT*3)*.08); walkMarkMat.opacity = .55 + Math.sin(stepT*3)*.2;
+    if (Math.hypot(hero.pos.x - S.walk.x, hero.pos.z - S.walk.z) < S.walk.r){ walkMark.visible = false; storyStep++; runStep(); }
+    return;   // 歩くパートでは戦闘用のヒント（体力・必殺技）は出さない
+  }
   if (S.battle){
     if (enemies.length === 0){
       storyWaveT -= dt;
@@ -1294,6 +1321,7 @@ function showEnd(){
 /* ================= game flow ================= */
 let running = false, paused = false, overShown = false, wave = 0, kills = 0, waveT = 0;
 function resetGame(){
+  walkMark.visible = false;
   if (cine){ cine = null; dlg.className = ''; document.body.classList.remove('cine'); heroFace.expr = null; heroFace.talk = 0; NPC.expr = null; NPC.talk = 0; }
   barkEl.classList.remove('on');
   for (const e of [...enemies]) removeEnemy(e); boss = null; clearTeles(); $('bossbar').classList.remove('on'); $('hud').classList.remove('boss');
@@ -1372,7 +1400,7 @@ function updateHud(){
   hpFill.style.width = (hero.hp/hero.maxHp*100)+'%'; hpText.textContent = `${Math.ceil(hero.hp)} / ${hero.maxHp}`;
   hpBar.classList.toggle('low', hero.hp < 30);
   atbFill.style.width = hero.atb+'%'; atbBar.classList.toggle('full', hero.atb>=100); atbReady.classList.toggle('on', hero.atb>=100);
-  waveEl.textContent = mode==='story' ? '第1話　風の沈黙' : `WAVE ${Math.max(1,wave)}`; killsEl.textContent = `撃破 ${kills}`;
+  waveEl.textContent = mode==='story' ? '第一話　風の沈黙' : `WAVE ${Math.max(1,wave)}`; killsEl.textContent = `撃破 ${kills}`;
 }
 function updatePadUi(){
   if (lastPad === padConnected) return; lastPad = padConnected;
