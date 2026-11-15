@@ -69,6 +69,9 @@
     text-align:center;padding:calc(24px + var(--sat)) 24px calc(24px + var(--sab));
     background:radial-gradient(ellipse at center,rgba(5,8,20,.35),rgba(3,5,12,.88));z-index:20;transition:opacity .4s}
   .ov.hide{opacity:0;pointer-events:none}
+  /* title version label: bottom-right, kept inside the iPhone safe area */
+  .ver{position:absolute;right:calc(10px + var(--sar));bottom:calc(8px + var(--sab));
+    font-size:10px;letter-spacing:.08em;color:#93a9cc;opacity:.7;pointer-events:none}
   .logo{font-family:Cinzel,serif;font-weight:800;font-size:clamp(38px,11vw,84px);letter-spacing:.14em;line-height:1;
     background:linear-gradient(180deg,#ffffff,#9fe9ff 55%,#4a8dff);-webkit-background-clip:text;background-clip:text;color:transparent;
     filter:drop-shadow(0 0 18px rgba(110,200,255,.55))}
