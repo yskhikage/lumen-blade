@@ -1,4 +1,4 @@
-// LUMEN BLADE — main game module (rendering, player, enemies, story flow, UI wiring).
+// WindShield (旧 LUMEN BLADE) — main game module (rendering, player, enemies, story flow, UI wiring).
 // TODO: split further into modules (see CLAUDE.md). Type-checking is disabled here for now.
 // @ts-nocheck
 import * as THREE from 'three';
@@ -619,7 +619,7 @@ function spawnEnemy(type, pos, elite=false){
   const hp = elite ? hpBase*3.2 : hpBase;
   const bar = document.createElement('div'); bar.className = 'ebar'+(elite?' elite':''); bar.innerHTML='<i></i>'; labels.appendChild(bar);
   spawnBeam(pos, color);
-  const e = {type, elite, lm, name: elite ? 'ゴーレム・ロード' : type==='golem' ? 'クリスタル・ゴーレム' : 'ヴォイド・メイジ', g, body, core, mat, orbit, ground, gm, color, sc, hp, maxHp:hp, state:'spawn', t:0,
+  const e = {type, elite, lm, name: mode==='story' ? '正体不明の影' : elite ? 'ゴーレム・ロード' : type==='golem' ? 'クリスタル・ゴーレム' : 'ヴォイド・メイジ', g, body, core, mat, orbit, ground, gm, color, sc, hp, maxHp:hp, state:'spawn', t:0,
     cd:1+Math.random()*1.5, vel:new THREE.Vector3(), stagger:0, flash:0, bar, barI:bar.firstChild,
     radius:(type==='golem'?.9:.6)*sc, hover:type==='golem'?1.1:1.7, strikeDir:new THREE.Vector3(), struck:false, ph:Math.random()*6};
   emit(new THREE.Vector3(pos.x,.3,pos.z), color, 40, 3, .9, 4, 1.5, 2);
@@ -1156,7 +1156,7 @@ addEventListener('pointerdown', () => { if (cine) cine.tap = true; });
 
 /* ================= barks ================= */
 const barkEl = $('bark'); let barkT = 0; const barkSaid = new Set();
-function bark(text, who='シエル', once=null){
+function bark(text, who=NAMES.ciel, once=null){
   if (once){ if (barkSaid.has(once)) return; barkSaid.add(once); }
   barkEl.innerHTML = `<b>${who}</b>${text}`; barkEl.classList.add('on'); barkT = 3.2;
 }
@@ -1238,12 +1238,17 @@ function spawnShockLite(pos){
 
 /* ================= story flow ================= */
 let mode = 'story', storyStep = 0, storyWave = 0, storyWaveT = 0, stepT = 0, playTime = 0;
+// WindShield 第1話「風の沈黙」。会話(scene) → 戦闘(battle) → 会話 … の順に進む。
+// ボス戦(boss)の仕組みはコードに残してあるが、第1話では使わない。
+const ep1Reset = () => { hero.pos.set(0,0,-11.4); hero.facing = Math.PI; };
 const STORY = [
-  {scene:'prologue', setup:() => { hero.pos.set(0,0,-11.4); hero.facing = Math.PI; }},
-  {battle:[['golem','golem'], ['golem','golem','caster'], ['golem','caster','caster','golem']], obj:'祭壇を侵す結晶体を打ち払え'},
-  {scene:'bossIntro', setup:() => { for (const e of [...enemies]) removeEnemy(e); hero.pos.set(0,0,-3); hero.facing = 0; spawnBoss(); }},
-  {boss:true, obj:'穢れし守護者を鎮めよ'},
-  {scene:'ending', setup:() => { hero.pos.set(0,0,-11.4); hero.facing = Math.PI; $('bossbar').classList.remove('on'); $('hud').classList.remove('boss'); }},
+  {scene:'ep1_dawn', setup:ep1Reset},                 // ① 夜明け
+  {scene:'ep1_hush'},                                 // ③ 最初の沈黙（② 歩くパートは次のステップで追加）
+  {scene:'ep1_unrest'},                               // ④ 異変
+  {battle:[['golem','golem'], ['golem','golem','caster'], ['golem','caster','caster','golem']], obj:'広場に現れた影を祓え'},
+  {scene:'ep1_heresy', setup:() => { for (const e of [...enemies]) removeEnemy(e); ep1Reset(); }},  // ⑤ 異端
+  {scene:'ep1_farewell'},                             // ⑥ 別れ（⑦ 去るパートは次のステップで追加）
+  {scene:'ep1_departure'},                            // ⑧ ラスト
   {end:true}
 ];
 const objEl = $('objective');
@@ -1252,7 +1257,7 @@ function runStep(){
   const S = STORY[storyStep]; stepT = 0;
   if (!S) return;
   if (S.scene){ setObjective(null); startScene(S.scene, () => { storyStep++; runStep(); }, S.setup); }
-  else if (S.battle){ storyWave = 0; storyWaveT = 1.2; setObjective(S.obj); bark('来るよ、ルミナ！'); }
+  else if (S.battle){ storyWave = 0; storyWaveT = 1.2; setObjective(S.obj); bark('なんだ、あれは……！', NAMES.people); }
   else if (S.boss){ S.downT = 0; setObjective(S.obj); banner('BOSS','穢れし守護者 ゴーレム・ロード'); bark('守護者の大技は、足元の赤い円を見て避けて！'); }
   else if (S.end){ showEnd(); }
 }
@@ -1267,7 +1272,7 @@ function updateStory(dt){
         banner(`WAVE ${storyWave} / ${S.battle.length}`);
         list.forEach((t,i) => { let a, x, z; do { a = Math.random()*Math.PI*2; x = Math.sin(a)*12; z = Math.cos(a)*12; } while (z < -8 && Math.abs(x) < 6);
           spawnEnemy(t, new THREE.Vector3(x,0,z)); });
-        if (list.includes('caster')) bark('遠くの結晶体は魔法を撃ってくる！ ○で避けて！', 'シエル', 'caster');
+        if (list.includes('caster')) bark('遠くの影は何かを撃ってきます！ ○で避けて！', NAMES.ciel, 'caster');
         storyWaveT = 1.6; hero.hp = Math.min(hero.maxHp, hero.hp + 15);
       }
     }
@@ -1277,8 +1282,8 @@ function updateStory(dt){
       S.downT -= dt; if (S.downT <= 0){ S.downT = 0; boss = null; storyStep++; runStep(); }
     }
   }
-  if (hero.hp < 40) bark('無理しないで……！', 'シエル', 'lowhp');
-  if (hero.atb >= 100) bark('今よ！ △で必殺技！', 'シエル', 'atb');
+  if (hero.hp < 40) bark('無理をなさらないで……！', NAMES.ciel, 'lowhp');
+  if (hero.atb >= 100) bark('今です！ △を！', NAMES.ciel, 'atb');
 }
 function showEnd(){
   running = false; overShown = true; overAt = performance.now(); setObjective(null);
@@ -1308,7 +1313,7 @@ function startGame(m='story', fromStep=0){
     if (fromStep===0){ playTime = 0; barkSaid.clear(); }
     storyStep = fromStep;
     if (STORY[storyStep].boss){ hero.pos.set(0,0,-3); hero.facing = 0; spawnBoss(); }
-    if (fromStep===0) banner('CHAPTER 1','月の祭壇');
+    if (fromStep===0) banner('EPISODE 1','風の沈黙');
     camYaw = hero.facing + Math.PI; camTarget.set(hero.pos.x,1.2,hero.pos.z);
     runStep();
   } else emit(new THREE.Vector3(0,.5,0), new THREE.Color(.7,1.8,2.6), 80, 6, 1, 4, .5, 3);
@@ -1321,7 +1326,7 @@ function toTitle(){
 }
 function showOver(){
   overShown = true; overAt = performance.now();
-  $('overStats').innerHTML = mode==='story' ? 'ルミナは力尽きた……<br>直前のチェックポイントから再開できます' : `到達 WAVE <b>${wave}</b><br>撃破数 <b>${kills}</b>`;
+  $('overStats').innerHTML = mode==='story' ? 'エルフィナは力尽きた……<br>直前のチェックポイントから再開できます' : `到達 WAVE <b>${wave}</b><br>撃破数 <b>${kills}</b>`;
   $('overOv').classList.remove('hide');
 }
 let overAt = 0;
@@ -1367,7 +1372,7 @@ function updateHud(){
   hpFill.style.width = (hero.hp/hero.maxHp*100)+'%'; hpText.textContent = `${Math.ceil(hero.hp)} / ${hero.maxHp}`;
   hpBar.classList.toggle('low', hero.hp < 30);
   atbFill.style.width = hero.atb+'%'; atbBar.classList.toggle('full', hero.atb>=100); atbReady.classList.toggle('on', hero.atb>=100);
-  waveEl.textContent = mode==='story' ? 'CHAPTER 1　月の祭壇' : `WAVE ${Math.max(1,wave)}`; killsEl.textContent = `撃破 ${kills}`;
+  waveEl.textContent = mode==='story' ? '第1話　風の沈黙' : `WAVE ${Math.max(1,wave)}`; killsEl.textContent = `撃破 ${kills}`;
 }
 function updatePadUi(){
   if (lastPad === padConnected) return; lastPad = padConnected;
