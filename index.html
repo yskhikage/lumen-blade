@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>LUMEN BLADE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="game"></div>
+<div id="labels"></div>
+<div id="hud">
+  <div class="panel">
+    <div class="pname">LUMEN</div>
+    <div class="bar hp" id="hpBar"><i id="hpFill"></i><span id="hpText">100 / 100</span></div>
+    <div class="bar atb" id="atbBar"><i id="atbFill" style="width:0%"></i></div>
+    <div id="atbReady">△ 必殺技 READY</div>
+  </div>
+  <div id="wave">WAVE 1</div>
+  <div id="kills">撃破 0</div>
+  <div id="padStatus">🎮 未接続</div>
+  <div id="objective"></div>
+  <div id="bossbar"><div id="bossName"></div><div class="bb"><i id="bossFill"></i></div></div>
+  <div id="target"><div class="tl">◆ LOCK ON</div><div class="tn" id="tName"></div><div class="tb"><i id="tFill"></i></div></div>
+</div>
+<div id="banner"></div>
+<div class="lb" id="lbT"></div><div class="lb" id="lbB"></div>
+<div id="dlg"><div id="dName"></div><div id="dText"></div><div id="dNext">▼</div></div>
+<div id="bark"></div>
+<div id="flash"></div>
+
+<div id="touch">
+  <div id="joy"><div id="knob"></div></div>
+  <div id="pad">
+    <div class="tbtn b-tri" data-a="special">△<small>必殺</small></div>
+    <div class="tbtn b-cir" data-a="dodge">○<small>回避</small></div>
+    <div class="tbtn b-crs" data-a="jump">✕<small>ジャンプ</small></div>
+    <div class="tbtn b-sq" data-a="attack">□<small>攻撃</small></div>
+    <div class="tbtn b-lock" id="lockBtn" data-a="lock">LOCK</div>
+  </div>
+  <div id="pauseBtn">Ⅱ</div>
+</div>
+
+<div class="ov" id="startOv">
+  <div class="head">
+    <div class="logo">LUMEN<br>BLADE</div>
+    <div class="sub">— 3D ACTION PROTOTYPE —</div>
+    <div class="btnrow">
+      <button class="btn" id="startBtn" disabled>LOADING…</button>
+      <button class="btn sub" id="endlessBtn" disabled>○ エンドレス</button>
+    </div>
+  </div>
+  <div class="controls">
+    <span>左スティック</span><span>移動</span>
+    <span>右スティック</span><span>カメラ</span>
+    <b>□</b><span>攻撃（連打で3段コンボ）</span>
+    <b>✕</b><span>ジャンプ</span>
+    <b>○</b><span>回避（ギリギリで JUST DODGE）</span>
+    <b>△</b><span>必殺技（ゲージMAX時）</span>
+    <b>R3 / L1</b><span>ロックオン（右スティックで切替）</span>
+  </div>
+  <div class="note" id="padNote">PS5コントローラーをBluetoothでiPhoneに接続して、どれかボタンを押すと認識されます。<br>
+    認識しないときは、このページをSafariで直接開いてみてね。コントローラーがなくても画面タッチで遊べます。</div>
+</div>
+
+<div class="ov hide" id="overOv">
+  <div class="ovtitle">DEFEATED</div>
+  <div class="stats" id="overStats"></div>
+  <div class="btnrow">
+    <button class="btn" id="retryBtn">✕ リトライ</button>
+    <button class="btn sub" id="titleBtn">○ タイトルへ</button>
+  </div>
+</div>
+
+<div class="ov hide" id="endOv">
+  <div class="chap">CHAPTER 1 CLEAR</div>
+  <div class="ctitle">月の祭壇</div>
+  <div class="stats" id="endStats"></div>
+  <div class="tbc">— TO BE CONTINUED —</div>
+  <div class="btnrow">
+    <button class="btn" id="endTitleBtn">✕ タイトルへ</button>
+    <button class="btn sub" id="endEndlessBtn">○ エンドレスで遊ぶ</button>
+  </div>
+</div>
+
+<div class="ov hide" id="pauseOv">
+  <div class="ovtitle" style="color:#cfe3ff;text-shadow:0 0 16px rgba(120,180,255,.7)">PAUSE</div>
+  <div class="stats">OPTIONSボタン / Esc で再開</div>
+  <button class="btn" id="resumeBtn">再開</button>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
