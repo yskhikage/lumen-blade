@@ -183,8 +183,9 @@
     background:linear-gradient(90deg,transparent,rgba(160,220,255,.9));transform-origin:right;animation:tlLine 1.1s .4s cubic-bezier(.2,.7,.2,1) both}
   .tl-blade i:last-child{background:linear-gradient(270deg,transparent,rgba(160,220,255,.9));transform-origin:left}
   /* glint that runs along the blade line every few seconds */
-  .tl-blade i::after{content:"";position:absolute;top:-1px;bottom:-1px;width:40%;left:-40%;
-    background:linear-gradient(90deg,transparent,#fff,transparent);animation:tlGlint 5s 2s infinite}
+  .tl-blade i::after{content:"";position:absolute;top:-1px;bottom:-1px;width:40%;
+    background:linear-gradient(90deg,transparent,#fff,transparent);animation:tlGlint 5s 2s infinite;
+    left:0;transform:translateX(-100%);will-change:transform} /* transform only: no repaint every frame */
   .tl-blade i:last-child::after{animation-delay:2.25s}
   .tl-sub{margin-top:1.4em;font-size:10px;font-weight:500;letter-spacing:.55em;margin-right:-.55em;color:rgba(190,210,240,.6);
     animation:tlFade 1.2s .9s both}
@@ -200,7 +201,9 @@
   .tl-item::before{content:"";position:absolute;inset:0;opacity:0;transition:opacity .25s;
     background:linear-gradient(90deg,rgba(120,200,255,.28),rgba(120,200,255,.06) 70%,transparent);
     border-left:2px solid var(--cyan)}
-  .tl-item.main::before,.tl-item:hover::before,.tl-item:focus-visible::before{opacity:1}
+  .tl-item.main::before,.tl-item:focus-visible::before{opacity:1}
+  /* hover only on devices with a real mouse: on iPhone a :hover style can turn the first tap into a "hover" instead of a press */
+  @media (hover:hover){ .tl-item:hover::before{opacity:1} }
   .tl-item:focus{outline:none}
   .tl-item:active{transform:scale(.98)}
   /* items appear one after another once the models have loaded */
@@ -215,6 +218,7 @@
   .tl-loadbar{width:160px;height:1px;background:rgba(150,200,255,.2)}
   .tl-loadbar i{display:block;height:100%;width:0;background:var(--cyan);box-shadow:0 0 8px var(--cyan);transition:width .4s}
   #startOv.ready .tl-load{opacity:0}
+  #startOv.ready .tl-load span{animation:none} /* stop the blinking once hidden */
 
   .tl-foot{position:absolute;left:calc(16px + var(--sal));right:calc(12px + var(--sar));bottom:calc(10px + var(--sab));
     display:flex;align-items:flex-end;gap:16px;pointer-events:none} /* display only: never swallow taps meant for the menu */
@@ -237,7 +241,7 @@
   @keyframes tlIn{from{opacity:0;letter-spacing:.42em;filter:blur(10px) drop-shadow(0 0 22px rgba(120,200,255,.35))}}
   @keyframes tlFade{from{opacity:0}}
   @keyframes tlLine{from{transform:scaleX(0)}}
-  @keyframes tlGlint{0%{left:-40%}22%,100%{left:100%}}
+  @keyframes tlGlint{0%{transform:translateX(-100%)}22%,100%{transform:translateX(250%)}} /* 250% of 40% width = full line */
 
   /* landscape: logo and menu on the left third, scene on the right */
   @media (orientation:landscape){

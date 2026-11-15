@@ -58,6 +58,23 @@ composer.addPass(grade);
 composer.addPass(new OutputPass());
 let aberr = 0, hurtFx = 0;
 
+/* adaptive resolution: if the phone can't hold ~60fps, render at a lower pixel ratio, and go back up once it recovers.
+   A level that once failed is never retried (cap), so the resolution doesn't keep bouncing up and down. */
+let pr = DPR, prCap = DPR, fpsFrames = 0, fpsTime = 0, fpsGood = 0, lastFrameAt = performance.now();
+function adaptResolution(){
+  const now = performance.now(), dt = (now - lastFrameAt)/1000; lastFrameAt = now;
+  if (now < 5000 || dt > .5) return;            // ignore start-up (shader compile, texture upload) and background tabs
+  fpsFrames++; fpsTime += dt;
+  if (fpsTime < 1) return;
+  const fps = fpsFrames/fpsTime; fpsFrames = 0; fpsTime = 0;
+  let next = pr;
+  if (fps < 48 && pr > .8){ prCap = Math.min(prCap, pr); next = Math.max(.8, pr - .15); fpsGood = 0; }
+  else if (fps > 57){ if (++fpsGood >= 4 && pr + .1 < prCap){ next = pr + .1; fpsGood = 0; } }
+  else fpsGood = 0;
+  if (next === pr) return;
+  pr = next; renderer.setPixelRatio(pr); composer.setPixelRatio(pr);
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+}
 addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
@@ -1309,19 +1326,26 @@ function showOver(){
 }
 let overAt = 0;
 function setPause(v){ paused = v; $('pauseOv').classList.toggle('hide', !v); }
-$('startBtn').addEventListener('click', () => startGame('story'));
-$('endlessBtn').addEventListener('click', () => startGame('endless'));
+// iPhone: react the moment the finger lifts (pointerup) instead of waiting for the delayed "click",
+// which arrives late or gets lost while the game is busy rendering. The real click that follows a tap is ignored
+// so nothing fires twice; keyboard Enter/Space (a click with detail 0) still works.
+function onTap(el, fn){
+  el.addEventListener('pointerup', e => { if (el.disabled || e.button > 0) return; fn(); });
+  el.addEventListener('click', e => { if (e.detail === 0 && !el.disabled) fn(); });
+}
+onTap($('startBtn'), () => startGame('story'));
+onTap($('endlessBtn'), () => startGame('endless'));
 // title "controls" panel: opened from the menu (or △), closed by tapping anywhere (or ○ / △)
 const setCtrlPanel = v => $('startOv').classList.toggle('ctrl-open', v);
 const ctrlOpen = () => $('startOv').classList.contains('ctrl-open');
-$('ctrlBtn').addEventListener('click', () => setCtrlPanel(true));
-$('ctrlPanel').addEventListener('click', () => setCtrlPanel(false));
+onTap($('ctrlBtn'), () => setCtrlPanel(true));
+onTap($('ctrlPanel'), () => setCtrlPanel(false));
 const retry = () => startGame(mode, mode==='story' ? storyStep : 0);
-$('retryBtn').addEventListener('click', retry);
-$('titleBtn').addEventListener('click', toTitle);
-$('endTitleBtn').addEventListener('click', toTitle);
-$('endEndlessBtn').addEventListener('click', () => startGame('endless'));
-$('resumeBtn').addEventListener('click', () => setPause(false));
+onTap($('retryBtn'), retry);
+onTap($('titleBtn'), toTitle);
+onTap($('endTitleBtn'), toTitle);
+onTap($('endEndlessBtn'), () => startGame('endless'));
+onTap($('resumeBtn'), () => setPause(false));
 function nextWave(){
   wave++;
   const elite = wave % 5 === 0;
@@ -1359,6 +1383,7 @@ addEventListener('gamepaddisconnected', () => { lastPad = null; });
 const clock = new THREE.Clock();
 function loop(){
   requestAnimationFrame(loop);
+  adaptResolution();
   const dt = Math.min(clock.getDelta(), 1/20), now = clock.elapsedTime;
   const inp = gatherInput(); updatePadUi();
 
