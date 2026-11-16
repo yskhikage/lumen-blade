@@ -2,7 +2,7 @@
 // TODO: split further into modules (see CLAUDE.md). Type-checking is disabled here for now.
 // @ts-nocheck
 import * as THREE from 'three';
-import { initAudio, sfx } from './audio';
+import { initAudio, sfx, setWind } from './audio';
 import { Z3, lerpA, mixPose, STANCE, POSE, runPose, smooth, LEG_L, LEG_R, LEG_SET, ATK, sampleAtk, runPose2 } from './motion/poses';
 import { SCENES, NAMES } from './story/scenes';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -202,6 +202,69 @@ const pl2 = new THREE.PointLight(0xc070ff, 40, 30, 2); pl2.position.set(-14,5,14
     m.position.set(Math.sin(a)*r, h/2-2, Math.cos(a)*r); m.rotation.y = Math.random()*3; scene.add(m);
   }
 }
+/* ================= アースファン（世界樹型の巨大風車） =================
+   幹から枝が伸び、その先に羽根車（ローター）が5つ付いた形。祭壇の奥、はるか遠くに立つ。
+   羽根の縁の光る線は「超古代技術」の動力のイメージ。風が弱まると回転と一緒に光も弱まる。
+   羽根車を1つずつ止められるようにしてあるのは、ラストの「羽根がひとつ、音もなく止まった」のため。 */
+const FAN = { g:new THREE.Group(), rotors:[], glowMat:null };
+{
+  const trunkMat = new THREE.MeshStandardMaterial({color:0x1a1e2c, roughness:.9, metalness:.2});
+  const bladeMat = new THREE.MeshStandardMaterial({color:0x2a3042, roughness:.6, metalness:.5, side:THREE.DoubleSide});
+  FAN.glowMat = new THREE.MeshStandardMaterial({color:0x000000, emissive:new THREE.Color(.45,1.3,2.0), emissiveIntensity:1.6});
+  const F = FAN.g; F.position.set(0, -2, -44); scene.add(F);
+  // 幹（上に向かって細くなる）と、根元の広がり
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 3.4, 30, 16), trunkMat); trunk.position.y = 15; F.add(trunk);
+  const root = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 7, 4, 16), trunkMat); root.position.y = 2; F.add(root);
+  // 羽根車を1つ作る：中心の軸 + 板状の羽根 + 羽根の縁の光る線
+  const rotor = (x, y, z, radius, blades, base) => {
+    const hub = new THREE.Group(); hub.position.set(x, y, z); F.add(hub);
+    hub.add(new THREE.Mesh(new THREE.CylinderGeometry(radius*.09, radius*.09, radius*.12, 12).rotateX(Math.PI/2), trunkMat));
+    const spin = new THREE.Group(); hub.add(spin);
+    for (let i=0;i<blades;i++){
+      const arm = new THREE.Group(); arm.rotation.z = i/blades*Math.PI*2; spin.add(arm);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(radius*.18, radius*.92, .12), bladeMat); b.position.y = radius*.54; b.rotation.y = .35; arm.add(b);
+      const line = new THREE.Mesh(new THREE.BoxGeometry(.08, radius*.9, .14), FAN.glowMat); line.position.set(radius*.09, radius*.54, 0); line.rotation.y = .35; arm.add(line);
+    }
+    FAN.rotors.push({spin, base, factor:1, stop:false});
+  };
+  // 枝（幹から斜めに伸びる）
+  const branch = (x, y, len, ang) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(.45, .8, len, 10), trunkMat);
+    m.position.set(x/2, y - Math.cos(ang)*len/2 + 1, 0); m.rotation.z = ang; F.add(m); };
+  rotor(0, 31, 1.6, 12, 6, .35);                       // 頂上の大きな羽根車（ラストで止まるのはこれ）
+  branch(-9, 22, 11, 1.0);  rotor(-9, 22, 1.2, 6.5, 5, .55);
+  branch( 9, 20, 11, -1.0); rotor( 9, 20, 1.2, 6.0, 5, .6);
+  branch(-14, 13, 15, 1.2); rotor(-14, 13, 1.0, 5.0, 4, .75);
+  branch( 14, 12, 15, -1.2); rotor( 14, 12, 1.0, 5.0, 4, .7);
+}
+/* 風の状態：on(穏やか) / stutter(止まりかけては回る) / weak(弱い) / off(静寂)
+   wind（0〜1）がアースファンの回転・光・舞う粒子・風の音の強さをまとめて決める。 */
+let windMode = 'on', wind = 1, windGoal = 1, windStutT = 0;
+function setWindMode(m){
+  windMode = m; windStutT = 0;
+  windGoal = m==='on' ? 1 : m==='weak' ? .22 : m==='off' ? 0 : windGoal;
+}
+function fanStopMain(){ FAN.rotors[0].stop = true; }   // 頂上の羽根車だけを止める
+function resetWind(){ setWindMode('on'); for (const r of FAN.rotors){ r.stop = false; r.factor = 1; } }
+function updateWind(dt){
+  if (windMode==='stutter'){
+    // 弱い⇔強いをランダムな間隔で行き来させ、弱まるときに風車をきしませる
+    windStutT -= dt;
+    if (windStutT <= 0){
+      const weak = Math.random() < .5;
+      windGoal = weak ? .05 + Math.random()*.12 : .55 + Math.random()*.4;
+      windStutT = .9 + Math.random()*1.8;
+      if (weak && running) sfx('creak');
+    }
+  }
+  wind = THREE.MathUtils.damp(wind, windGoal, windMode==='off' ? 2.6 : windMode==='stutter' ? 2.2 : 1.1, dt);
+  for (const r of FAN.rotors){
+    if (r.stop) r.factor = THREE.MathUtils.damp(r.factor, 0, .5, dt);
+    r.spin.rotation.z += dt * r.base * (.02 + wind) * r.factor;   // 静寂でもごくわずかに惰性で回る
+  }
+  FAN.glowMat.emissiveIntensity = .15 + 1.5*wind;
+  setWind(running ? wind : 0);
+}
+
 // embers
 const EMB = 320, embPos = new Float32Array(EMB*3), embCol = new Float32Array(EMB*3), embSpd = new Float32Array(EMB);
 for (let i=0;i<EMB;i++){
@@ -1107,6 +1170,8 @@ function nextLine(first){
   dText.textContent = '';
   heroFace.expr = L.who==='lumina' ? (L.expr||null) : heroFace.expr;
   if (L.who==='ciel') NPC.expr = L.expr || null;
+  if (L.wind) setWindMode(L.wind);       // 台本の行ごとの風の演出（on / off / stutter / weak）
+  if (L.fx==='fanStop') fanStopMain();   // アースファンの羽根車をひとつ止める
   if (first) shotTo(L.shot, true);
   else shotTo(L.shot, false);
   sfx('lock2');
@@ -1130,6 +1195,7 @@ function shotTo(shot, snap){
   else if (shot==='boss' && boss){ const bp = boss.g.position.clone(), d = hero.pos.clone().sub(bp).setY(0).normalize();
     camPos2.copy(bp).addScaledVector(d, 6.5).add(new THREE.Vector3(1.5,1.2,0)); camLook2.copy(bp).add(new THREE.Vector3(0,2.6,0)); }
   else if (shot==='wide2'){ camPos2.set(-3.5,1.4,-9.5); camLook2.set(0,1.6,-14.5); }
+  else if (shot==='fan'){ camPos2.set(-6,1.0,4); camLook2.set(0,21,-44); }   // アースファンを見上げる
   else { camPos2.set(4.5,2.6,-6.5); camLook2.set(0,1.3,-13.2); }
   if (snap){ camera.position.copy(camPos2); camLookCur.copy(camLook2); }
 }
@@ -1242,17 +1308,17 @@ let mode = 'story', storyStep = 0, storyWave = 0, storyWaveT = 0, stepT = 0, pla
 // ボス戦(boss)の仕組みはコードに残してあるが、第1話では使わない。
 const ep1Reset = () => { hero.pos.set(0,0,-11.4); hero.facing = Math.PI; };
 const STORY = [
-  {scene:'ep1_dawn', setup:ep1Reset},                 // ① 夜明け
+  {scene:'ep1_dawn', setup:ep1Reset, wind:'on'},                 // ① 夜明け
   // ② 祈りの台座へ（操作パート）：広場の反対側から、神官と台座の前まで歩く
   {walk:{x:0, z:-12, r:1.8}, obj:'祈りの台座へ向かう', setup:() => { hero.pos.set(0,0,8); hero.facing = Math.PI; },
     barks:[[1,'巫女さま、今年も麦が実りますように'], [3.6,'風の声を、聞かせてください'], [6.2,'エルフィナさまがいれば安心だ']]},
   {scene:'ep1_hush', setup:ep1Reset},                 // ③ 最初の沈黙
   {scene:'ep1_unrest'},                               // ④ 異変
-  {battle:[['golem','golem'], ['golem','golem','caster'], ['golem','caster','caster','golem']], obj:'広場に現れた影を祓え'},
+  {battle:[['golem','golem'], ['golem','golem','caster'], ['golem','caster','caster','golem']], obj:'広場に現れた影を祓え', wind:'stutter'},
   {scene:'ep1_heresy', setup:() => { for (const e of [...enemies]) removeEnemy(e); ep1Reset(); }},  // ⑤ 異端
   {scene:'ep1_farewell'},                             // ⑥ 別れ
   // ⑦ 聖都を去る（操作パート）：台座に背を向け、広場の外れ（門に見立てた場所）まで歩く
-  {walk:{x:0, z:16, r:1.8}, obj:'聖都を去る', setup:() => { hero.pos.set(0,0,-8); hero.facing = 0; },  // 神官がカメラを塞がないよう少し前から
+  {walk:{x:0, z:16, r:1.8}, obj:'聖都を去る', wind:'off', setup:() => { hero.pos.set(0,0,-8); hero.facing = 0; },  // 神官がカメラを塞がないよう少し前から
     barks:[[4,'……異端だ']]},
   {scene:'ep1_departure'},                            // ⑧ ラスト
   {end:true}
@@ -1268,6 +1334,7 @@ function setObjective(t){ if (t){ objEl.innerHTML = `◆ ${t}`; objEl.classList.
 function runStep(){
   const S = STORY[storyStep]; stepT = 0;
   if (!S) return;
+  if (S.wind) setWindMode(S.wind);   // ステップ単位の風（やり直したときも正しい状態に戻るように）
   if (S.scene){ setObjective(null); startScene(S.scene, () => { storyStep++; runStep(); }, S.setup); }
   else if (S.battle){ storyWave = 0; storyWaveT = 1.2; setObjective(S.obj); bark('なんだ、あれは……！', NAMES.people); }
   else if (S.walk){
@@ -1321,6 +1388,7 @@ function showEnd(){
 /* ================= game flow ================= */
 let running = false, paused = false, overShown = false, wave = 0, kills = 0, waveT = 0;
 function resetGame(){
+  resetWind();
   walkMark.visible = false;
   if (cine){ cine = null; dlg.className = ''; document.body.classList.remove('cine'); heroFace.expr = null; heroFace.talk = 0; NPC.expr = null; NPC.talk = 0; }
   barkEl.classList.remove('on');
@@ -1428,7 +1496,11 @@ function loop(){
   aberr = THREE.MathUtils.damp(aberr, 0, 7, dt); hurtFx = THREE.MathUtils.damp(hurtFx, 0, 3, dt);
   grade.uniforms.uAberr.value = .0012 + aberr; grade.uniforms.uHurt.value = hurtFx*.5 + (running && hero.hp < 30 ? .25 + Math.sin(now*4)*.1 : 0);
   for (const c of crystals){ c.m.rotation.y += dt*.8; c.m.position.y = c.base + Math.sin(now*1.5+c.ph)*.25; }
-  for (let i=0;i<EMB;i++){ embPos[i*3+1] += embSpd[i]*dt; embPos[i*3] += Math.sin(now*.5+i)*.003; if (embPos[i*3+1] > 12) embPos[i*3+1] = 0; }
+  updateWind(dt);
+  // 舞う粒子は風に流される。風が止まると、ほとんど動かなくなる
+  const wk = .08 + .92*wind;
+  for (let i=0;i<EMB;i++){ embPos[i*3+1] += embSpd[i]*dt*wk; embPos[i*3] += (Math.sin(now*.5+i)*.003 + dt*.5*wind);
+    if (embPos[i*3] > 26) embPos[i*3] = -26; if (embPos[i*3+1] > 12) embPos[i*3+1] = 0; }
   embGeo.attributes.position.needsUpdate = true;
 
   barkT -= dt; if (barkT <= 0) barkEl.classList.remove('on');

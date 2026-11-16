@@ -7,7 +7,43 @@ export function initAudio(){
       noiseBuf = actx.createBuffer(1, actx.sampleRate*.5, actx.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i]=Math.random()*2-1; }
     actx.resume();
+    if (windLevel > 0) setWind(windLevel);
   }catch(e){ actx = null; }
+}
+
+/* ---------- 風の環境音（WindShield） ----------
+   ループするノイズを2系統に分けて「風らしさ」を作る:
+   - 低い「ごうっ」という風音（ローパス）。ゆっくり揺れるLFOで、強弱の波（突風）をつける
+   - 高い「ひゅう」という風切り音（バンドパス）。周波数を揺らして口笛のように
+   setWind(0〜1) で全体の強さを変える。0 にすると完全な静寂になる。 */
+let windLevel = 0, windGain = null, whistleGain = null, windApplied = -1;
+function ensureWind(){
+  if (windGain || !actx) return;
+  const buf = actx.createBuffer(1, actx.sampleRate*2, actx.sampleRate), d = buf.getChannelData(0);
+  for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+  const src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
+  const low = actx.createBiquadFilter(); low.type = 'lowpass'; low.frequency.value = 520; low.Q.value = .8;
+  const band = actx.createBiquadFilter(); band.type = 'bandpass'; band.frequency.value = 950; band.Q.value = 7;
+  windGain = actx.createGain(); windGain.gain.value = 0;
+  whistleGain = actx.createGain(); whistleGain.gain.value = 0;
+  const lfo = (hz, amount, target) => { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = hz; g.gain.value = amount; o.connect(g); g.connect(target); o.start(); };
+  lfo(.09, 260, low.frequency);   // 突風のうねり
+  lfo(.13, 380, band.frequency);  // 風切り音の音程の揺れ
+  src.connect(low); low.connect(windGain); windGain.connect(actx.destination);
+  src.connect(band); band.connect(whistleGain); whistleGain.connect(actx.destination);
+  src.start();
+}
+export function setWind(level){
+  windLevel = level;
+  if (!actx) return;               // 音はユーザー操作（ゲーム開始）後にしか鳴らせないので、それまでは値だけ覚えておく
+  if (Math.abs(level - windApplied) < .01) return;   // 毎フレーム呼ばれるので、変化が小さいときは何もしない
+  windApplied = level;
+  try{
+    ensureWind();
+    const t = actx.currentTime;
+    windGain.gain.setTargetAtTime(level*.22, t, .15);
+    whistleGain.gain.setTargetAtTime(level*level*.05, t, .15);
+  }catch(e){}
 }
 export function sfx(type){
   if (!actx) return;
@@ -36,5 +72,6 @@ export function sfx(type){
     else if (type==='lock'){ tone('sine',1500,1500,.07,.07); setTimeout(()=>sfx('lock2'),70); }
     else if (type==='lock2'){ tone('sine',2000,2000,.08,.06); }
     else if (type==='shot'){ tone('sine',700,300,.2,.06); }
+    else if (type==='creak'){ tone('sawtooth',58,42,.9,.045); noise(320,110,.9,.1,2.5); }  // 風車がきしむ音
   }catch(e){}
 }
