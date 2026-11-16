@@ -275,38 +275,86 @@ cloudSea.rotation.x = -Math.PI/2; cloudSea.position.y = -26; scene.add(cloudSea)
   island(-115, 14, 40, 16, 5); island(30, 22, 140, 13, 9); island(-40, -6, 130, 10, 13);
 }
 /* ================= アースファン（世界樹型の巨大風車） =================
-   幹から枝が伸び、その先に羽根車（ローター）が5つ付いた形。祭壇の奥、はるか遠くに立つ。
-   羽根の縁の光る線は「超古代技術」の動力のイメージ。風が弱まると回転と一緒に光も弱まる。
+   ねじれ合う樹皮の幹が雲海の下から立ち上がり、上に葉の茂み。その前に、金の骨組みと白い帆の羽根車が3つ。
+   中心の青いコアと光る内輪は「超古代技術」の動力のイメージ。風が弱まると回転と一緒に光も弱まる。
    羽根車を1つずつ止められるようにしてあるのは、ラストの「羽根がひとつ、音もなく止まった」のため。 */
 const FAN = { g:new THREE.Group(), rotors:[], glowMat:null };
 {
-  const trunkMat = new THREE.MeshStandardMaterial({color:0x1a1e2c, roughness:.9, metalness:.2});
-  const bladeMat = new THREE.MeshStandardMaterial({color:0x2a3042, roughness:.6, metalness:.5, side:THREE.DoubleSide});
-  FAN.glowMat = new THREE.MeshStandardMaterial({color:0x000000, emissive:new THREE.Color(.45,1.3,2.0), emissiveIntensity:1.6});
-  const F = FAN.g; F.position.set(0, -2, -44); scene.add(F);
-  // 幹（上に向かって細くなる）と、根元の広がり
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 3.4, 30, 16), trunkMat); trunk.position.y = 15; F.add(trunk);
-  const root = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 7, 4, 16), trunkMat); root.position.y = 2; F.add(root);
-  // 羽根車を1つ作る：中心の軸 + 板状の羽根 + 羽根の縁の光る線
-  const rotor = (x, y, z, radius, blades, base) => {
+  const F = FAN.g; F.position.set(0, -12, -78); scene.add(F);   // 広場のどこからでも見える位置
+  const bark = new THREE.MeshStandardMaterial({...pbrMaps('bark_platanus', 2, 8), color:0xf2efe8, roughness:1, metalness:0, envMapIntensity:.7});
+  const gold = new THREE.MeshStandardMaterial({color:0xe6c27a, metalness:1, roughness:.28, envMapIntensity:1.2});   // 空を映す本物の金属
+  const sail = new THREE.MeshStandardMaterial({color:0xf7f6f1, roughness:.85, metalness:0, side:THREE.DoubleSide, envMapIntensity:.8});
+  // 葉：小さな葉を何千枚も描いたテクスチャを、色と凹凸（bump）の両方に使って茂みの奥行きを出す
+  const leafTex = canvasTex(512, (g,s) => {
+    g.fillStyle = '#2f4a2a'; g.fillRect(0,0,s,s);
+    for (let i=0;i<3200;i++){
+      const x = Math.random()*s, y = Math.random()*s, rx = 5 + Math.random()*8, ry = 2.5 + Math.random()*3.5;
+      g.fillStyle = `hsl(${88 + Math.random()*36},${32 + Math.random()*25}%,${24 + Math.random()*34}%)`;
+      g.beginPath(); g.ellipse(x, y, rx, ry, Math.random()*Math.PI, 0, Math.PI*2); g.fill();
+    }
+  });
+  leafTex.wrapS = leafTex.wrapT = THREE.RepeatWrapping; leafTex.repeat.set(3, 3);
+  const leaf = new THREE.MeshStandardMaterial({map:leafTex, bumpMap:leafTex, bumpScale:3, color:0xd8ecc8, roughness:.92, metalness:0});
+  FAN.glowMat = new THREE.MeshStandardMaterial({color:0x0a1a33, emissive:new THREE.Color(.35,.85,1.6), emissiveIntensity:1.6, roughness:.2, metalness:.3});
+
+  // 幹：何本もの樹皮の束がねじれ合って、雲海の下から立ち上がる（世界樹）
+  const TOP = 30, BOT = -34;
+  F.add(new THREE.Mesh(new THREE.CylinderGeometry(2.6, 4.2, TOP-BOT, 20).translate(0, (TOP+BOT)/2, 0), bark));
+  for (let k=0;k<7;k++){
+    const pts = [];
+    for (let i=0;i<=24;i++){
+      const t = i/24, y = BOT + (TOP+2-BOT)*t, r = THREE.MathUtils.lerp(4.4, 2.2, t) + Math.sin(t*9+k)*.25;
+      const a = k/7*Math.PI*2 + t*Math.PI*1.6;   // 上に行くほどねじれる
+      pts.push(new THREE.Vector3(Math.cos(a)*r, y, Math.sin(a)*r));
+    }
+    F.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 72, .95 - k*.05, 8), bark));
+  }
+  // 上の枝と葉の茂み（羽根車の後ろ側に広がる）
+  const branch = (to) => {
+    const c = new THREE.CatmullRomCurve3([new THREE.Vector3(0, TOP-6, -1), new THREE.Vector3(to.x*.45, TOP+to.y*.4, -2), to]);
+    F.add(new THREE.Mesh(new THREE.TubeGeometry(c, 24, .7, 7), bark));
+  };
+  const blob = (x, y, z, r) => {
+    const g = new THREE.IcosahedronGeometry(r, 2), p = g.attributes.position, v = new THREE.Vector3();
+    for (let i=0;i<p.count;i++){ v.fromBufferAttribute(p, i); const n = 1 + .18*Math.sin(v.x*1.7+y)*Math.sin(v.y*1.3+x)*Math.sin(v.z*1.9); p.setXYZ(i, v.x*n, v.y*n, v.z*n); }
+    g.computeVertexNormals(); const m = new THREE.Mesh(g, leaf); m.position.set(x, y, z); F.add(m);
+  };
+  for (const [x,y,z,r] of [[-15,37,-5,6],[15,38,-5,6.5],[-8,44,-6,7],[8,45,-6,7],[0,48,-7,7.5],[-21,30,-4,4.5],[21,31,-4,4.5],[-3,40,-9,6],[4,36,-10,6]]){
+    branch(new THREE.Vector3(x*.8, y-2, z+2)); blob(x, y, z, r);
+  }
+
+  // 羽根車：中心の青いコア、金の輪、金の骨組みに張られた白い帆
+  const rotor = (x, y, z, R, blades, base) => {
     const hub = new THREE.Group(); hub.position.set(x, y, z); F.add(hub);
-    hub.add(new THREE.Mesh(new THREE.CylinderGeometry(radius*.09, radius*.09, radius*.12, 12).rotateX(Math.PI/2), trunkMat));
     const spin = new THREE.Group(); hub.add(spin);
+    spin.add(new THREE.Mesh(new THREE.SphereGeometry(R*.085, 24, 16), FAN.glowMat));                       // コア
+    spin.add(new THREE.Mesh(new THREE.TorusGeometry(R*.13, R*.018, 8, 40), gold));
+    spin.add(new THREE.Mesh(new THREE.TorusGeometry(R*.3, R*.012, 6, 64), FAN.glowMat));                  // 光る内輪
+    spin.add(new THREE.Mesh(new THREE.TorusGeometry(R*.62, R*.014, 6, 96), gold));
+    spin.add(new THREE.Mesh(new THREE.TorusGeometry(R*.97, R*.02, 6, 128), gold));
     for (let i=0;i<blades;i++){
       const arm = new THREE.Group(); arm.rotation.z = i/blades*Math.PI*2; spin.add(arm);
-      const b = new THREE.Mesh(new THREE.BoxGeometry(radius*.18, radius*.92, .12), bladeMat); b.position.y = radius*.54; b.rotation.y = .35; arm.add(b);
-      const line = new THREE.Mesh(new THREE.BoxGeometry(.08, radius*.9, .14), FAN.glowMat); line.position.set(radius*.09, radius*.54, 0); line.rotation.y = .35; arm.add(line);
+      const spar = new THREE.Mesh(new THREE.BoxGeometry(R*.03, R*.98, R*.03), gold); spar.position.y = R*.5; arm.add(spar);
+      // 帆：少しふくらんだ布。根元は細く、先は広い
+      const W = R*.3, L = R*.72, g = new THREE.PlaneGeometry(W, L, 6, 10), p = g.attributes.position;
+      for (let j=0;j<p.count;j++){ const px = p.getX(j), py = p.getY(j), u = (py/L)+.5;
+        p.setX(j, px*(.55 + .45*u) + W*.5*(.55+.45*u)); p.setZ(j, Math.sin((px/W+.5)*Math.PI)*R*.025); }
+      g.computeVertexNormals();
+      const sl = new THREE.Mesh(g, sail); sl.position.y = R*.24 + L*.5; sl.rotation.y = .28; arm.add(sl);
+      for (const t of [.0, .33, .66, 1.0]){   // 帆を横切る金の桟
+        const bw = W*(.55+.45*t), bat = new THREE.Mesh(new THREE.BoxGeometry(bw, R*.012, R*.02), gold);
+        bat.position.set(bw*.5, R*.24 + L*t, 0); bat.rotation.y = .28; arm.add(bat);
+      }
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(R*.014, L, R*.02), gold); edge.position.set(W, R*.24 + L*.5, -.1); edge.rotation.y = .28; arm.add(edge);
     }
+    // 回らない外枠（幹に固定された装飾の輪）
+    hub.add(new THREE.Mesh(new THREE.TorusGeometry(R*1.06, R*.016, 6, 128), gold));
+    const tilt = new THREE.Mesh(new THREE.TorusGeometry(R*1.12, R*.01, 6, 128), gold); tilt.rotation.y = .5; hub.add(tilt);
     FAN.rotors.push({spin, base, factor:1, stop:false});
   };
-  // 枝（幹から斜めに伸びる）
-  const branch = (x, y, len, ang) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(.45, .8, len, 10), trunkMat);
-    m.position.set(x/2, y - Math.cos(ang)*len/2 + 1, 0); m.rotation.z = ang; F.add(m); };
-  rotor(0, 31, 1.6, 12, 6, .35);                       // 頂上の大きな羽根車（ラストで止まるのはこれ）
-  branch(-9, 22, 11, 1.0);  rotor(-9, 22, 1.2, 6.5, 5, .55);
-  branch( 9, 20, 11, -1.0); rotor( 9, 20, 1.2, 6.0, 5, .6);
-  branch(-14, 13, 15, 1.2); rotor(-14, 13, 1.0, 5.0, 4, .75);
-  branch( 14, 12, 15, -1.2); rotor( 14, 12, 1.0, 5.0, 4, .7);
+  rotor(0, 30, 4.5, 17, 6, .22);          // 主の羽根車（ラストで止まるのはこれ）
+  rotor(-17, 21, 2.5, 6.5, 6, .45);
+  rotor(17, 22, 2.5, 6, 6, .5);
 }
 /* 風の状態：on(穏やか) / stutter(止まりかけては回る) / weak(弱い) / off(静寂)
    wind（0〜1）がアースファンの回転・光・舞う粒子・風の音の強さをまとめて決める。 */
@@ -1273,7 +1321,7 @@ function shotTo(shot, snap){
   else if (shot==='boss' && boss){ const bp = boss.g.position.clone(), d = hero.pos.clone().sub(bp).setY(0).normalize();
     camPos2.copy(bp).addScaledVector(d, 6.5).add(new THREE.Vector3(1.5,1.2,0)); camLook2.copy(bp).add(new THREE.Vector3(0,2.6,0)); }
   else if (shot==='wide2'){ camPos2.set(-3.5,1.4,-9.5); camLook2.set(0,1.6,-14.5); }
-  else if (shot==='fan'){ camPos2.set(-6,1.0,4); camLook2.set(0,21,-44); }   // アースファンを見上げる
+  else if (shot==='fan'){ camPos2.set(-6,1.0,6); camLook2.set(0,15,-78); }   // アースファンを見上げる
   else { camPos2.set(4.5,2.6,-6.5); camLook2.set(0,1.3,-13.2); }
   if (snap){ camera.position.copy(camPos2); camLookCur.copy(camLook2); }
 }
