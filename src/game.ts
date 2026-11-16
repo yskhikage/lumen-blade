@@ -34,7 +34,7 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 300)
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth/2, innerHeight/2), 0.35, 0.45, 0.92);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth/2, innerHeight/2), 0.25, 0.4, 0.95);
 composer.addPass(bloom);
 const grade = new ShaderPass({
   uniforms:{ tDiffuse:{value:null}, uTime:{value:0}, uAberr:{value:.0012}, uHurt:{value:0}, uDesat:{value:0} },
@@ -204,6 +204,25 @@ function rockMass(rTop, height, seed=1){
 }
 const crystalMats = [new THREE.Color(0x57e1ff), new THREE.Color(0xc070ff)].map(c =>
   new THREE.MeshStandardMaterial({color:0x111122, emissive:c, emissiveIntensity:2.4, roughness:.2, metalness:.6, flatShading:true}));
+{ // 欄干の内側の花壇：白と青の花（参考画像の手前の花）。数千本を InstancedMesh で一度に描いて軽くする
+  const GATE = .38, inner = ARENA - 1.3, outer = ARENA + .2;
+  const curb = new THREE.Mesh(new THREE.TorusGeometry(inner - .15, .12, 6, 160, Math.PI*2 - GATE*2), new THREE.MeshStandardMaterial({color:0xf1f2f6, roughness:.55}));
+  curb.rotation.x = -Math.PI/2; curb.rotation.z = Math.PI/2 + GATE; curb.position.y = .1; scene.add(curb);
+  const soil = new THREE.Mesh(new THREE.RingGeometry(inner - .1, outer, 160, 1, Math.PI/2 + GATE, Math.PI*2 - GATE*2), new THREE.MeshStandardMaterial({color:0x4a5a36, roughness:1}));
+  soil.rotation.x = -Math.PI/2; soil.position.y = .03; soil.scale.y = -1; scene.add(soil);
+  const NL = 1400, NF = 2600, m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
+  const pick = () => { let a; do { a = Math.random()*Math.PI*2; } while (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < GATE + .04);
+    const r = inner + Math.random()*(outer - inner); return [Math.sin(a)*r, Math.cos(a)*r]; };
+  const leaves = new THREE.InstancedMesh(new THREE.ConeGeometry(.07, .42, 4).translate(0, .21, 0), new THREE.MeshStandardMaterial({color:0x4f7d3c, roughness:.9}), NL);
+  for (let i=0;i<NL;i++){ const [x,z] = pick(); e.set((Math.random()-.5)*.6, Math.random()*6, (Math.random()-.5)*.6); q.setFromEuler(e);
+    sc.setScalar(.7 + Math.random()*.8); m4.compose(ps.set(x, .03, z), q, sc); leaves.setMatrixAt(i, m4); }
+  scene.add(leaves);
+  const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.075, 0), new THREE.MeshStandardMaterial({color:0xffffff, roughness:.7}), NF);
+  const cols = [new THREE.Color(0xffffff), new THREE.Color(0xf4f6ff), new THREE.Color(0x5b86e5), new THREE.Color(0x3d63c9), new THREE.Color(0xa9c3ff)];
+  for (let i=0;i<NF;i++){ const [x,z] = pick(); q.identity(); sc.set(1, .6, 1).multiplyScalar(.7 + Math.random()*.7);
+    m4.compose(ps.set(x, .28 + Math.random()*.22, z), q, sc); flowers.setMatrixAt(i, m4); flowers.setColorAt(i, cols[Math.floor(Math.random()*cols.length)]); }
+  scene.add(flowers);
+}
 // 青地に白い星（風見の紋章）の旗。風が止まると垂れ下がって動かなくなる
 const bannerTex = canvasTex(256, (g,s) => {
   g.fillStyle = '#1f4f9e'; g.fillRect(0,0,s,s);
@@ -213,13 +232,25 @@ const bannerTex = canvasTex(256, (g,s) => {
   g.beginPath(); g.arc(0,0,s*.06,0,Math.PI*2); g.fill();
 });
 const banners = [];
+// 白い大理石の柱：縦の溝（フルーティング）を形そのものに刻み、上下に金の帯を巻く
+const colMat = new THREE.MeshStandardMaterial({color:0xe6e8ee, roughness:.55, metalness:0, envMapIntensity:.6});
+const goldMat = new THREE.MeshStandardMaterial({color:0xe2bd72, metalness:1, roughness:.3, envMapIntensity:1.2});
+function flutedColumn(rTop, rBot, h){
+  const g = new THREE.CylinderGeometry(rTop, rBot, h, 72, 1, false), p = g.attributes.position, v = new THREE.Vector3();
+  for (let i=0;i<p.count;i++){ v.fromBufferAttribute(p, i); const r = Math.hypot(v.x, v.z); if (r < .01) continue;
+    const a = Math.atan2(v.z, v.x), k = 1 - .045*Math.pow(Math.abs(Math.cos(a*12)), 3);   // 24本の溝
+    p.setXYZ(i, v.x*k, v.y, v.z*k); }
+  g.computeVertexNormals(); return g;
+}
 const crystals = [];
 for (let i=0;i<10;i++){
   const a = i/10*Math.PI*2 + 0.15, r = ARENA + 4.5;
   const h = 3 + Math.random()*5;
-  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9,1.1,h,20), stoneMat);
+  const col = new THREE.Mesh(flutedColumn(0.85, 0.95, h), colMat);
   col.position.set(Math.sin(a)*r, h/2, Math.cos(a)*r); col.castShadow = true; col.receiveShadow = true; scene.add(col);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.0,0.4,20), stoneMat); cap.position.set(col.position.x,h+0.2,col.position.z); scene.add(cap);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.35, .45, 40), colMat); base.position.set(col.position.x, .22, col.position.z); scene.add(base);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(1.3, .95, .45, 40), colMat); cap.position.set(col.position.x, h+.22, col.position.z); scene.add(cap);
+  for (const y of [.5, h-.05]){ const band = new THREE.Mesh(new THREE.TorusGeometry(.95, .07, 8, 48), goldMat); band.rotation.x = Math.PI/2; band.position.set(col.position.x, y, col.position.z); scene.add(band); }
   const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.6,0), crystalMats[i%2]);
   cr.position.set(col.position.x, h+1.6, col.position.z); cr.scale.y = 1.6; scene.add(cr);
   crystals.push({m:cr, base:h+1.6, ph:Math.random()*6});
@@ -542,8 +573,11 @@ function rimVRM(vrm, r,g,b){
 const NPC = { root:new THREE.Group(), vrm:null, bones:{}, sign:1, hipsY:0, look:new THREE.Object3D(), talk:0, expr:null, blinkT:1 };
 NPC.root.position.set(0,0,-14.0); scene.add(NPC.root); scene.add(NPC.look);
 { // altar behind her
-  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.4,1.0,8), stoneMat); ped.position.set(0,.5,-16.4); ped.castShadow = ped.receiveShadow = true; scene.add(ped);
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(1.25,1.1,.18,8), stoneMat); top.position.set(0,1.08,-16.4); scene.add(top);
+  // 祈りの台座：白い大理石の三段、金の輪
+  const ped = new THREE.Mesh(flutedColumn(1.05, 1.15, 1.0), colMat); ped.position.set(0,.62,-16.4); ped.castShadow = ped.receiveShadow = true; scene.add(ped);
+  const step = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 2.1, .25, 48), colMat); step.position.set(0,.12,-16.4); step.receiveShadow = true; scene.add(step);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.15,.22,48), colMat); top.position.set(0,1.2,-16.4); scene.add(top);
+  for (const [y,r] of [[.27,1.15],[1.1,1.12],[1.31,1.38]]){ const ring = new THREE.Mesh(new THREE.TorusGeometry(r,.05,8,64), goldMat); ring.rotation.x = Math.PI/2; ring.position.set(0,y,-16.4); scene.add(ring); }
   const ac = new THREE.Mesh(new THREE.OctahedronGeometry(.55,0), crystalMats[0]); ac.position.set(0,3.6,-16.4); ac.scale.y = 1.7; scene.add(ac);
   crystals.push({m:ac, base:3.6, ph:0});
   const al = new THREE.PointLight(0x7fe8ff, 3, 7, 2); al.position.set(0,3.4,-16.8); scene.add(al);
@@ -1649,7 +1683,7 @@ function loop(){
     } else if (ctrlOpen()){ if (inp.dodge || inp.special) setCtrlPanel(false); }
     else if (inp.special) setCtrlPanel(true);
     else if (heroReady){ if (inp.jump || inp.attack) startGame('story'); else if (inp.dodge) startGame('endless'); }
-    const a = now*.12; camera.position.set(Math.sin(a)*4.2, 1.6, -11.8 + Math.cos(a)*4.2); camera.lookAt(0,1.1,-12.6);
+    const a = now*.12; camera.position.set(Math.sin(a)*3.8, 2.0, -9.8 + Math.cos(a)*3.8); camera.lookAt(0,1.1,-12.6);   // 祈りの台座にめり込まない軌道
     hero.pos.set(0,0,-11.8); H.root.rotation.y = Math.PI; animateHero(dt, now); updateTrail();
     sky.position.copy(camera.position); updateParticles(dt); composer.render(); return;
   }
