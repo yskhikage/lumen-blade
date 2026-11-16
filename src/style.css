@@ -15,6 +15,7 @@
   /* HUD */
   #hud{padding:calc(12px + var(--sat)) calc(14px + var(--sar)) 0 calc(14px + var(--sal));opacity:0;transition:opacity .4s}
   #hud.on{opacity:1}
+  #hud{text-shadow:0 1px 3px rgba(0,10,30,.75),0 0 10px rgba(0,10,30,.35)}   /* 明るい昼空の上でも読めるように */
   .panel{position:absolute;top:calc(12px + var(--sat));left:calc(14px + var(--sal));width:min(300px,52vw)}
   .pname{font-family:var(--disp);font-weight:700;letter-spacing:.18em;font-size:15px;
     text-shadow:0 0 10px rgba(127,232,255,.8)}

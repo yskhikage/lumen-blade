@@ -22,24 +22,24 @@ const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
 renderer.setPixelRatio(DPR);
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 $('game').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x070a18);
-scene.fog = new THREE.FogExp2(0x0c1230, 0.024);
+scene.fog = new THREE.FogExp2(0xcfe2f5, 0.006);   // 昼の空気遠近：遠くほど白っぽい青に溶ける
 const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 300);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth/2, innerHeight/2), 0.6, 0.45, 0.88);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth/2, innerHeight/2), 0.35, 0.45, 0.92);
 composer.addPass(bloom);
 const grade = new ShaderPass({
-  uniforms:{ tDiffuse:{value:null}, uTime:{value:0}, uAberr:{value:.0012}, uHurt:{value:0} },
+  uniforms:{ tDiffuse:{value:null}, uTime:{value:0}, uAberr:{value:.0012}, uHurt:{value:0}, uDesat:{value:0} },
   vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-  fragmentShader:`uniform sampler2D tDiffuse; uniform float uTime; uniform float uAberr; uniform float uHurt; varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tDiffuse; uniform float uTime; uniform float uAberr; uniform float uHurt; uniform float uDesat; varying vec2 vUv;
     void main(){
       vec2 c = vUv-0.5; float d = length(c);
       vec2 off = c*uAberr*(1.0+d*5.0);
@@ -47,7 +47,9 @@ const grade = new ShaderPass({
       float l = dot(col, vec3(.299,.587,.114));
       col = mix(col, col*vec3(.86,1.0,1.18), smoothstep(.45,0.0,l)*.6);   // cool shadows
       col = mix(col, col*vec3(1.12,1.0,.86), smoothstep(.35,1.4,l)*.45);   // warm highlights
-      col *= 1.0 - smoothstep(.32,.9,d)*.6;                                 // vignette
+      col *= 1.0 - smoothstep(.32,.9,d)*.35;                                // vignette
+      col = mix(col, vec3(l)*vec3(.92,.95,1.0), uDesat);                    // 風が止まると世界が色を失う
+      col *= 1.0 - uDesat*.18;
       col = mix(col, col*vec3(1.4,.6,.6), uHurt*smoothstep(.2,.8,d));
       float n = fract(sin(dot(vUv*vec2(12.9898,78.233)+fract(uTime), vec2(1.0)))*43758.5453);
       col += (n-.5)*.018;                                                  // film grain
@@ -141,6 +143,13 @@ scene.add(sky);
 }
 const moon = new THREE.Mesh(new THREE.SphereGeometry(5,32,16), new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,2.3,2.6),fog:false}));
 moon.position.set(-55,48,-90); sky.add(moon);
+// 聖都アウリスの空：写真の昼空（Poly Haven の HDR を軽いJPGに変換したもの）を背景にする。夜の空ドーム・星・月は使わない
+sky.visible = false;
+new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}sky/aulis_sky_2k.jpg`, t => {
+  t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; scene.background = t; });
+scene.background = new THREE.Color(0x9cc4ef);   // 読み込みまでの仮の空色
+// 太陽の向き（空の写真の太陽の位置に合わせてある）
+const SUN_DIR = new THREE.Vector3(.83, 1.1, .56).normalize();
 { // environment reflections for metal
   const pmrem = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene();
   envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50,32,16), sky.material));
@@ -148,15 +157,16 @@ moon.position.set(-55,48,-90); sky.add(moon);
   blob(new THREE.Color(8,8,9),-20,24,-32,4); blob(new THREE.Color(.6,2.6,4),32,6,0,7); blob(new THREE.Color(3.2,.9,4),-30,6,12,7);
   scene.environment = pmrem.fromScene(envScene, .04).texture;
   // swap in a real photographed night sky (moonrise) for image-based lighting once it has loaded
-  new RGBELoader().load(`${import.meta.env.BASE_URL}hdri/qwantani_moonrise_puresky_1k.hdr`, hdr => {
+  new RGBELoader().load(`${import.meta.env.BASE_URL}hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr`, hdr => {
     hdr.mapping = THREE.EquirectangularReflectionMapping;
     scene.environment = pmrem.fromEquirectangular(hdr).texture;
     hdr.dispose(); pmrem.dispose();
   });
 }
 
-scene.add(new THREE.HemisphereLight(0x7088ff, 0x20101c, 0.7));
-const moonLight = new THREE.DirectionalLight(0xc4d6ff, 1.9);
+scene.add(new THREE.HemisphereLight(0xcfe4ff, 0xd9d2c4, 0.45));
+// 太陽光（変数名は夜の名残で moonLight のまま）
+const moonLight = new THREE.DirectionalLight(0xfff1dc, 2.3);
 moonLight.position.set(-12,22,10); moonLight.castShadow = true;
 moonLight.shadow.mapSize.set(1024,1024);
 Object.assign(moonLight.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:1,far:70});
@@ -165,22 +175,32 @@ scene.add(moonLight, moonLight.target);
 
 
 const floor = new THREE.Mesh(new THREE.CircleGeometry(ARENA+8, 72),
-  // stone paving: slightly damp (roughness scaled down) so the crystals and moon still glint on it
-  new THREE.MeshStandardMaterial({...pbrMaps('stone_tiles_02', 16, 16), color:0x6b7494, roughness:.85, metalness:0,
-    normalScale:new THREE.Vector2(1.2,1.2), envMapIntensity:.3})); // the sky HDR is bright: keep the night mood
+  // 白い大理石の広場（磨かれていて、空がうっすら映り込む）
+  new THREE.MeshStandardMaterial({...pbrMaps('marble_01', 9, 9), color:0xe6ecfb, roughness:.5, metalness:0, envMapIntensity:.55}));
 floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
 
-const runeMat = new THREE.MeshBasicMaterial({map:runeTex, color:new THREE.Color(0.25,0.9,1.4), transparent:true, opacity:.4,
-  blending:THREE.AdditiveBlending, depthWrite:false});
+// 床の紋様：白い大理石の上でも見えるよう、光る加算合成ではなく青いインクのような通常合成にする
+const runeMat = new THREE.MeshBasicMaterial({map:runeTex, color:new THREE.Color(0.18,0.38,0.85), transparent:true, opacity:.4, depthWrite:false});
 const rune = new THREE.Mesh(new THREE.PlaneGeometry(16,16), runeMat);
 rune.rotation.x = -Math.PI/2; rune.position.y = 0.02; scene.add(rune);
 const edge = new THREE.Mesh(new THREE.RingGeometry(ARENA+0.2, ARENA+0.5, 128),
-  new THREE.MeshBasicMaterial({color:new THREE.Color(0.3,1.2,2.0), transparent:true, opacity:.7, blending:THREE.AdditiveBlending, depthWrite:false}));
+  new THREE.MeshBasicMaterial({color:new THREE.Color(0.75,0.62,0.3), transparent:true, opacity:.85, depthWrite:false}));   // 縁取りは金
 edge.rotation.x = -Math.PI/2; edge.position.y = 0.03; scene.add(edge);
 
-const stoneMat = new THREE.MeshStandardMaterial({...pbrMaps('castle_wall_slates', 2, 3), color:0x8a90a8, roughness:1, metalness:0, envMapIntensity:.45});
+const stoneMat = new THREE.MeshStandardMaterial({...pbrMaps('marble_01', 1, 3), color:0xe8edf8, roughness:.55, metalness:0, envMapIntensity:.55});
+// 浮島の岩肌（広場の裏側・遠くの浮島）
+const rockMat = new THREE.MeshStandardMaterial({...pbrMaps('castle_wall_slates', 6, 2), color:0x9a958c, roughness:1, metalness:0, envMapIntensity:.6});
 const crystalMats = [new THREE.Color(0x57e1ff), new THREE.Color(0xc070ff)].map(c =>
   new THREE.MeshStandardMaterial({color:0x111122, emissive:c, emissiveIntensity:2.4, roughness:.2, metalness:.6, flatShading:true}));
+// 青地に白い星（風見の紋章）の旗。風が止まると垂れ下がって動かなくなる
+const bannerTex = canvasTex(256, (g,s) => {
+  g.fillStyle = '#1f4f9e'; g.fillRect(0,0,s,s);
+  g.strokeStyle = '#d8b765'; g.lineWidth = 10; g.strokeRect(8,8,s-16,s-16);
+  g.translate(s/2, s*.42); g.fillStyle = '#f5f7ff';
+  for (let i=0;i<8;i++){ g.rotate(Math.PI/4); g.beginPath(); g.moveTo(0,-s*.3); g.lineTo(s*.05,0); g.lineTo(-s*.05,0); g.closePath(); g.fill(); }
+  g.beginPath(); g.arc(0,0,s*.06,0,Math.PI*2); g.fill();
+});
+const banners = [];
 const crystals = [];
 for (let i=0;i<10;i++){
   const a = i/10*Math.PI*2 + 0.15, r = ARENA + 4.5;
@@ -191,16 +211,68 @@ for (let i=0;i<10;i++){
   const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.6,0), crystalMats[i%2]);
   cr.position.set(col.position.x, h+1.6, col.position.z); cr.scale.y = 1.6; scene.add(cr);
   crystals.push({m:cr, base:h+1.6, ph:Math.random()*6});
+  const bn = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 3.2, 1, 6), new THREE.MeshStandardMaterial({map:bannerTex, side:THREE.DoubleSide, roughness:.8}));
+  const toC = new THREE.Vector3(-col.position.x, 0, -col.position.z).normalize();
+  bn.position.set(col.position.x + toC.x*1.15, h - 1.4, col.position.z + toC.z*1.15); bn.lookAt(0, h - 1.4, 0);
+  scene.add(bn); banners.push({m:bn, ph:Math.random()*6});
 }
-const pl1 = new THREE.PointLight(0x57e1ff, 40, 30, 2); pl1.position.set(14,5,-14); scene.add(pl1);
-const pl2 = new THREE.PointLight(0xc070ff, 40, 30, 2); pl2.position.set(-14,5,14); scene.add(pl2);
-{ // distant mountains
-  const mm = new THREE.MeshStandardMaterial({color:0x0b0e1c, roughness:1, flatShading:true});
-  for (let i=0;i<34;i++){
-    const a = i/34*Math.PI*2 + Math.random()*.1, r = 62 + Math.random()*20, h = 14 + Math.random()*26;
-    const m = new THREE.Mesh(new THREE.ConeGeometry(8+Math.random()*10, h, 5), mm);
-    m.position.set(Math.sin(a)*r, h/2-2, Math.cos(a)*r); m.rotation.y = Math.random()*3; scene.add(m);
+const pl1 = new THREE.PointLight(0x57e1ff, 8, 30, 2); pl1.position.set(14,5,-14); scene.add(pl1);
+const pl2 = new THREE.PointLight(0xc070ff, 8, 30, 2); pl2.position.set(-14,5,14); scene.add(pl2);
+/* ================= 天空の聖都：雲海と浮島 =================
+   広場そのものが空に浮かぶ島。足元には雲の海、遠くには白い塔の建つ浮島と、そこから落ちる滝。 */
+{ // 広場の裏側の岩（浮いていることが分かるように）
+  const under = new THREE.Mesh(new THREE.CylinderGeometry(ARENA+8, ARENA-4, 9, 48, 1, true), rockMat); under.position.y = -4.5; scene.add(under);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(ARENA-4, 16, 48), rockMat); tip.rotation.x = Math.PI; tip.position.y = -17; scene.add(tip);
+}
+{ // 広場の縁の白い欄干。手前（+z 側）は「門」として開けておく（⑦ 聖都を去る の行き先）
+  const R = ARENA + .7, GAP = .16, white = new THREE.MeshStandardMaterial({color:0xf1f2f6, roughness:.55});
+  const arc = Math.PI*2 - GAP*2;
+  for (const y of [.08, 1.08]){   // 上下の手すり（門の部分だけ途切れたリング）
+    const rail = new THREE.Mesh(new THREE.TorusGeometry(R, y > .5 ? .14 : .1, 6, 160, arc), white);
+    rail.rotation.x = -Math.PI/2; rail.rotation.z = Math.PI/2 + GAP; rail.position.y = y; scene.add(rail);
   }
+  const n = 200, bal = new THREE.InstancedMesh(new THREE.CylinderGeometry(.08, .12, 1.0, 8), white, n), m4 = new THREE.Matrix4();
+  let k = 0;
+  for (let i=0;i<n;i++){ const a = GAP + i/(n-1)*arc; if (k >= n) break;
+    m4.makeTranslation(Math.sin(a)*R, .58, Math.cos(a)*R); bal.setMatrixAt(k++, m4); }
+  bal.count = k; scene.add(bal);
+  for (const sgn of [-1, 1]){   // 門柱
+    const a = sgn*GAP, post = new THREE.Mesh(new THREE.BoxGeometry(.6, 2.6, .6), white);
+    post.position.set(Math.sin(a)*R, 1.3, Math.cos(a)*R); scene.add(post);
+  }
+}
+const cloudTex = canvasTex(512, (g,s) => {
+  g.fillStyle = '#c9d9ec'; g.fillRect(0,0,s,s);
+  for (let i=0;i<260;i++){ const x=Math.random()*s, y=Math.random()*s, r=s*(.03+Math.random()*.09);
+    for (const [dx,dy] of [[0,0],[s,0],[-s,0],[0,s],[0,-s]]){   // 端でつながるように上下左右にも描く
+      const gr=g.createRadialGradient(x+dx,y+dy,0,x+dx,y+dy,r); gr.addColorStop(0,'rgba(255,255,255,.55)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+      g.fillStyle=gr; g.fillRect(x+dx-r,y+dy-r,r*2,r*2); } }
+});
+cloudTex.wrapS = cloudTex.wrapT = THREE.RepeatWrapping; cloudTex.repeat.set(10,10);
+const cloudSea = new THREE.Mesh(new THREE.CircleGeometry(420, 64), new THREE.MeshBasicMaterial({map:cloudTex, color:0xffffff}));
+cloudSea.rotation.x = -Math.PI/2; cloudSea.position.y = -26; scene.add(cloudSea);
+{ // 遠くの浮島：逆さの岩山の上に白い建物と青い屋根の尖塔、縁から雲海へ落ちる滝
+  const white = new THREE.MeshStandardMaterial({color:0xf4f2ee, roughness:.7});
+  const roof = new THREE.MeshStandardMaterial({color:0x3d6fc2, roughness:.5, metalness:.2});
+  const grass = new THREE.MeshStandardMaterial({color:0x7fae6a, roughness:1});
+  const fallTex = canvasTex(128, (g,s) => { const gr=g.createLinearGradient(0,0,0,s); gr.addColorStop(0,'rgba(255,255,255,.95)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr; g.fillRect(0,0,s,s); });
+  const fallMat = new THREE.MeshBasicMaterial({map:fallTex, transparent:true, opacity:.75, depthWrite:false, side:THREE.DoubleSide});
+  const island = (x, y, z, r, seed) => {
+    const g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
+    const rock = new THREE.Mesh(new THREE.ConeGeometry(r, r*1.8, 9), rockMat); rock.rotation.x = Math.PI; rock.position.y = -r*.9; g.add(rock);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(r, r*.98, .6, 18), grass); top.position.y = .3; g.add(top);
+    let rnd = seed; const R = () => (rnd = (rnd*9301 + 49297) % 233280) / 233280;
+    for (let i=0;i<6;i++){   // 建物と尖塔
+      const a = R()*Math.PI*2, d = R()*r*.6, h = 2 + R()*r*.9, w = 1 + R()*r*.25;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), white); b.position.set(Math.sin(a)*d, h/2+.6, Math.cos(a)*d); g.add(b);
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(w*.62, h*.5, 8), roof); sp.position.set(b.position.x, h+.6+h*.25, b.position.z); g.add(sp);
+    }
+    const fall = new THREE.Mesh(new THREE.PlaneGeometry(r*.25, r*3.2), fallMat);   // 滝
+    fall.position.set(0, -r*1.5, r*.92); g.add(fall);
+  };
+  island(-70, 6, -95, 14, 3); island(85, 10, -120, 18, 7); island(120, -2, 20, 12, 11);
+  island(-115, 14, 40, 16, 5); island(30, 22, 140, 13, 9); island(-40, -6, 130, 10, 13);
 }
 /* ================= アースファン（世界樹型の巨大風車） =================
    幹から枝が伸び、その先に羽根車（ローター）が5つ付いた形。祭壇の奥、はるか遠くに立つ。
@@ -262,6 +334,9 @@ function updateWind(dt){
     r.spin.rotation.z += dt * r.base * (.02 + wind) * r.factor;   // 静寂でもごくわずかに惰性で回る
   }
   FAN.glowMat.emissiveIntensity = .15 + 1.5*wind;
+  grade.uniforms.uDesat.value = (1 - wind)*.75;   // 風が弱まるほど色が抜ける
+  const tt = performance.now()/1000;
+  for (const b of banners){ b.m.rotation.z = Math.sin(tt*2.2 + b.ph)*.06*wind; b.m.rotation.x = -.12*wind + Math.sin(tt*3 + b.ph)*.05*wind; }
   setWind(running ? wind : 0);
 }
 
@@ -287,7 +362,7 @@ const shaftTex = canvasTex(256, (g,s) => {
 });
 const shafts = [];
 {
-  const dir = new THREE.Vector3(-12,22,10).normalize();
+  const dir = SUN_DIR.clone();
   for (const [x,z,r] of [[2,-3,3.2],[-6,5,2.4],[7,6,2.0],[-3,-9,1.6]]){
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r*.35, r, 36, 24, 1, true),
       new THREE.MeshBasicMaterial({map:shaftTex, color:new THREE.Color(.55,.75,1.25), transparent:true, opacity:.06,
@@ -304,7 +379,7 @@ const mistTex = canvasTex(256, (g,s) => {
 });
 const mists = [];
 for (let i=0;i<9;i++){
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(16,16), new THREE.MeshBasicMaterial({map:mistTex, color:new THREE.Color(.3,.4,.8),
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(16,16), new THREE.MeshBasicMaterial({map:mistTex, color:new THREE.Color(.5,.55,.65),
     transparent:true, opacity:.1, blending:THREE.AdditiveBlending, depthWrite:false}));
   m.rotation.x = -Math.PI/2; const a = Math.random()*Math.PI*2, r = Math.random()*16;
   m.position.set(Math.sin(a)*r, .25 + (i%3)*.25, Math.cos(a)*r); m.rotation.z = Math.random()*6;
@@ -1492,9 +1567,9 @@ function loop(){
   const inp = gatherInput(); updatePadUi();
 
   // ambient
-  rune.rotation.z += dt*.05; runeMat.opacity = .3 + Math.sin(now*1.3)*.08;
+  rune.rotation.z += dt*.05; runeMat.opacity = .45 + Math.sin(now*1.3)*.08;
   for (const m of mists){ m.m.rotation.z += m.sp*dt; m.m.material.opacity = .1 + Math.sin(now*.4+m.ph)*.04; }
-  shafts.forEach((m,i) => m.material.opacity = .035 + Math.sin(now*.5+i*1.7)*.015);
+  shafts.forEach((m,i) => m.material.opacity = .012 + Math.sin(now*.5+i*1.7)*.006);   // 昼は光の筋をごく控えめに
   grade.uniforms.uTime.value = now;
   aberr = THREE.MathUtils.damp(aberr, 0, 7, dt); hurtFx = THREE.MathUtils.damp(hurtFx, 0, 3, dt);
   grade.uniforms.uAberr.value = .0012 + aberr; grade.uniforms.uHurt.value = hurtFx*.5 + (running && hero.hp < 30 ? .25 + Math.sin(now*4)*.1 : 0);
@@ -1530,7 +1605,7 @@ function loop(){
     updateCine(dt, inp, now);
     const none = {mx:0,my:0,cx:0,cy:0,rx:0};
     updateHero(dt, none, now); updateFx(dt); updateDebris(dt); updateTrail(); updateParticles(dt);
-    sky.position.copy(camera.position); moonLight.position.set(hero.pos.x-12, 22, hero.pos.z+10); moonLight.target.position.copy(hero.pos);
+    sky.position.copy(camera.position); moonLight.position.copy(hero.pos).addScaledVector(SUN_DIR, 26); moonLight.target.position.copy(hero.pos);
     for (const e of enemies){ e.body.position.y = e.hover + Math.sin(now*2.2+e.ph)*.15; e.orbit.rotation.y += dt*2; if (e.state==='spawn'){ e.t+=dt; e.g.scale.setScalar(e.sc*easeOut(Math.min(1,e.t/.6))); if (e.t>.6) e.state='chase'; }
       e.g.rotation.y = lerpAngle(e.g.rotation.y, Math.atan2(hero.pos.x-e.g.position.x, hero.pos.z-e.g.position.z), Math.min(1,dt*3)); }
     composer.render(); return;
@@ -1579,7 +1654,7 @@ function loop(){
   camera.fov = THREE.MathUtils.damp(camera.fov, fovT, 9, dt); camera.updateProjectionMatrix();
   if (shake > 0){ camera.position.x += (Math.random()-.5)*shake; camera.position.y += (Math.random()-.5)*shake; shake *= Math.pow(.003, dt); if (shake < .01) shake = 0; }
   sky.position.copy(camera.position);
-  moonLight.position.set(hero.pos.x-12, 22, hero.pos.z+10); moonLight.target.position.copy(hero.pos);
+  moonLight.position.copy(hero.pos).addScaledVector(SUN_DIR, 26); moonLight.target.position.copy(hero.pos);
 
   updateHud();
   composer.render();

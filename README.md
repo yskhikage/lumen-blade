@@ -49,8 +49,9 @@ src/story/scenes.ts   第1話の台本（話し手・カメラ・表情・風の
 src/audio.ts          効果音・風の環境音（Web Audioで合成）
 src/style.css         UIスタイル
 public/models/*.vrm   キャラクターモデル
-public/textures/      床・石柱の写真スキャン素材（Poly Haven）
-public/hdri/          ライティング用の夜空HDR（Poly Haven）
+public/textures/      大理石・岩肌の写真スキャン素材（Poly Haven）
+public/hdri/          ライティング用の昼空HDR（Poly Haven）
+public/sky/           背景の空（HDRIをJPGに変換したもの）
 ```
 
 ## クレジット
@@ -58,5 +59,5 @@ public/hdri/          ライティング用の夜空HDR（Poly Haven）
 - 3Dモデル「Vita」（エルフィナ役）「Victoria Rubin」（若い神官役）: VRoid Project / pixiv Inc. — **CC0**
   （VRoid Studio β版サンプルモデル。テクスチャを1024pxに縮小して使用）
 - [three.js](https://threejs.org/) (MIT), [@pixiv/three-vrm](https://github.com/pixiv/three-vrm) (MIT)
-- テクスチャ「Stone Tiles 02」「Castle Wall Slates」、HDRI「Qwantani Moonrise (Pure Sky)」: [Poly Haven](https://polyhaven.com/) — **CC0**
-  （1k解像度のJPG / HDRを使用）
+- テクスチャ「Marble 01」「Castle Wall Slates」、HDRI「Kloofendal 48d Partly Cloudy (Pure Sky)」: [Poly Haven](https://polyhaven.com/) — **CC0**
+  （テクスチャ・ライティングは1k解像度。空の背景はHDRIを2048×1024のJPGに変換して使用）
