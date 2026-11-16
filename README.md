@@ -1,7 +1,15 @@
-# LUMEN BLADE
+# WindShield（ウインドシールド）
 
-PS5コントローラー（DualSense）で遊べる、ブラウザ向け3Dアクションゲームの試作です。
-iPhoneのSafariでそのまま動きます。
+風が人々の暮らしと文明を支える世界を舞台にした、ストーリー重視のファンタジーRPGの試作です。
+PS5コントローラー（DualSense）またはタッチ操作で遊べ、iPhoneのSafariでそのまま動きます。
+（旧タイトル「LUMEN BLADE」の3Dアクションをベースにしているため、リポジトリ名は lumen-blade のままです）
+
+## ストーリー
+
+**第1話「風の沈黙」** — 聖都アウリスで巫女を務める少女エルフィナは、ある日、風の声を聞けなくなる。
+
+- ストーリーモード：第1話（会話・歩くパート・戦闘・風の演出）
+- エンドレスモード：ウェーブ制の戦闘
 
 ▶ **プレイ:** https://yskhikage.github.io/lumen-blade/
 
@@ -35,10 +43,10 @@ npm run build    # dist/ に本番ビルド
 ```
 index.html            画面のHTML（HUD・会話ウィンドウ・メニュー）
 src/main.ts           エントリーポイント
-src/game.ts           ゲーム本体（描画・プレイヤー・敵・ボス・ストーリー進行・UI）
+src/game.ts           ゲーム本体（描画・アースファン・風の演出・プレイヤー・敵・ストーリー進行・UI）
 src/motion/poses.ts   キャラのポーズ・攻撃キーフレーム
-src/story/scenes.ts   第1章の会話シナリオ
-src/audio.ts          効果音（Web Audioで合成）
+src/story/scenes.ts   第1話の台本（話し手・カメラ・表情・風の演出）
+src/audio.ts          効果音・風の環境音（Web Audioで合成）
 src/style.css         UIスタイル
 public/models/*.vrm   キャラクターモデル
 public/textures/      床・石柱の写真スキャン素材（Poly Haven）
@@ -47,7 +55,7 @@ public/hdri/          ライティング用の夜空HDR（Poly Haven）
 
 ## クレジット
 
-- 3Dモデル「Vita」（ルミナ役）「Victoria Rubin」（シエル役）: VRoid Project / pixiv Inc. — **CC0**
+- 3Dモデル「Vita」（エルフィナ役）「Victoria Rubin」（若い神官役）: VRoid Project / pixiv Inc. — **CC0**
   （VRoid Studio β版サンプルモデル。テクスチャを1024pxに縮小して使用）
 - [three.js](https://threejs.org/) (MIT), [@pixiv/three-vrm](https://github.com/pixiv/three-vrm) (MIT)
 - テクスチャ「Stone Tiles 02」「Castle Wall Slates」、HDRI「Qwantani Moonrise (Pure Sky)」: [Poly Haven](https://polyhaven.com/) — **CC0**

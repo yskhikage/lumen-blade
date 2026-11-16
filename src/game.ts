@@ -1157,6 +1157,9 @@ let cine = null; const camPos2 = new THREE.Vector3(), camLook2 = new THREE.Vecto
 const dlg = $('dlg'), dName = $('dName'), dText = $('dText');
 function startScene(key, onEnd, setup){
   if (setup) setup();
+  // setup でエルフィナを移動させた直後は、頭の位置（ボーンのワールド座標）がまだ前の場所のまま。
+  // そのままだと最初のカメラが古い位置を基準に置かれて後ろ姿になるので、ここで更新しておく。
+  H.root.rotation.y = hero.facing; H.root.updateMatrixWorld(true);
   cine = {lines:SCENES[key], i:-1, typed:0, onEnd, t:0};
   document.body.classList.add('cine'); lockTarget = null;
   hero.state = 'free'; hero.vel.set(0,0,0); hero.combo = 0;
