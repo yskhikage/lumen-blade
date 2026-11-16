@@ -563,6 +563,57 @@ async function loadVRM(url){
   const bones = {}; for (const n of BONES){ const bn = vrm.humanoid.getNormalizedBoneNode(n); if (bn) bones[n] = bn; }
   return {vrm, bones, sign: vrm.meta && vrm.meta.metaVersion === '0' ? -1 : 1};
 }
+/* エルフィナの見た目をキャラ設定画に近づける（モデルファイルは変えず、読み込み時に色を変える）
+   - 髪：金髪を、青みのある銀髪寄りに
+   - 服：ピンクの部分を青に（テクスチャの画素の色相をずらす）
+   - 頭：青い花とリボンの髪飾りを付ける */
+function hueShiftTexture(tex, test, toHue){
+  const img = tex.image; if (!img || !img.width) return tex;
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+  for (let i=0;i<px.length;i+=4){
+    const r = px[i]/255, gg = px[i+1]/255, b = px[i+2]/255, mx = Math.max(r,gg,b), mn = Math.min(r,gg,b), l = (mx+mn)/2, dl = mx-mn;
+    if (dl < .08) continue;
+    const s = dl/(1-Math.abs(2*l-1)); let h = mx===r ? ((gg-b)/dl)%6 : mx===gg ? (b-r)/dl+2 : (r-gg)/dl+4; h = (h*60+360)%360;
+    if (!test(h, s, l)) continue;
+    const C = (1-Math.abs(2*l-1))*s, X = C*(1-Math.abs((toHue/60)%2-1)), m = l-C/2, k = Math.floor(toHue/60);
+    const [R,G,B] = [[C,X,0],[X,C,0],[0,C,X],[0,X,C],[X,0,C],[C,0,X]][k];
+    px[i] = (R+m)*255; px[i+1] = (G+m)*255; px[i+2] = (B+m)*255;
+  }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.flipY = tex.flipY; t.colorSpace = tex.colorSpace; t.wrapS = tex.wrapS; t.wrapT = tex.wrapT; t.channel = tex.channel;
+  return t;
+}
+function styleElfina(vrm, headBone, sign){
+  const done = new Map(), mats = new Set();
+  // 同じマテリアルが何十ものメッシュで共有されているので、まず重複なしで集めてから1回ずつ変更する
+  vrm.scene.traverse(o => { if (o.isMesh) [].concat(o.material).forEach(m => mats.add(m)); });
+  { for (const m of mats){
+      const n = m.name || '';
+      if (n.includes('HAIR')){                                   // 銀髪寄りに
+        if (m.color) m.color.multiply(new THREE.Color(.86, .9, 1.0));
+        if (m.shadeColorFactor) m.shadeColorFactor.multiply(new THREE.Color(.8, .86, 1.0));
+      }
+      if (n.includes('CLOTH')){                                  // ピンク → 青
+        for (const key of ['map', 'shadeMultiplyTexture']){
+          const t = m[key]; if (!t) continue;
+          if (!done.has(t)) done.set(t, hueShiftTexture(t, (h, s) => (h > 285 || h < 25) && s > .15, 222));
+          m[key] = done.get(t); m.needsUpdate = true;
+        }
+      }
+    }
+  }
+  // 髪飾り：青い花（花びら8枚＋金の芯）と、垂れる青いリボン
+  const orn = new THREE.Group(), blue = new THREE.MeshStandardMaterial({color:0x2f62d6, roughness:.5, side:THREE.DoubleSide});
+  for (let i=0;i<8;i++){ const pet = new THREE.Mesh(new THREE.SphereGeometry(.026, 10, 6), blue); pet.scale.set(1, .45, 1.9);
+    const a = i/8*Math.PI*2; pet.position.set(Math.cos(a)*.03, Math.sin(a)*.03, 0); pet.rotation.z = a + Math.PI/2; orn.add(pet); }
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.014, 10, 8), new THREE.MeshStandardMaterial({color:0xe2bd72, metalness:1, roughness:.3})); core.position.z = .01; orn.add(core);
+  for (const s of [-1, 1]){ const rib = new THREE.Mesh(new THREE.PlaneGeometry(.025, .16), blue); rib.position.set(s*.018, -.09, -.01); rib.rotation.z = s*.18; orn.add(rib); }
+  orn.position.set(.085*sign, .1, -.02); orn.rotation.set(0, Math.PI/2*sign, .3*sign);
+  headBone.add(orn);
+}
 function rimVRM(vrm, r,g,b){
   const mats = new Set(); vrm.scene.traverse(o => { if (o.isMesh) [].concat(o.material).forEach(m => mats.add(m)); });
   for (const m of mats){ if (!m.isMToonMaterial) continue;
@@ -589,12 +640,13 @@ NPC.root.position.set(0,0,-14.0); scene.add(NPC.root); scene.add(NPC.look);
   let done = 0;
   const tick = () => { done++; loadFill.style.width = (done/2*100)+'%'; };
   Promise.all([
-    loadVRM(`${import.meta.env.BASE_URL}models/lumina.vrm`).then(r => { tick(); return r; }),
-    loadVRM(`${import.meta.env.BASE_URL}models/ciel.vrm`).then(r => { tick(); return r; })
+    // エルフィナ＝長い髪・白い服のモデル（ciel.vrm）、若い神官＝短い髪のモデル（lumina.vrm）
+    loadVRM(`${import.meta.env.BASE_URL}models/ciel.vrm`).then(r => { tick(); return r; }),
+    loadVRM(`${import.meta.env.BASE_URL}models/lumina.vrm`).then(r => { tick(); return r; })
   ]).then(([L, C]) => {
     // hero: Lumina
     const vrm = L.vrm; vrm.scene.position.y = -PIV; H.inner.add(vrm.scene);
-    rimVRM(vrm, .3,.75,1.4);
+    rimVRM(vrm, .3,.75,1.4); styleElfina(vrm, L.bones.head, L.sign);
     H.bones = L.bones; H.sign = L.sign; H.hipsY = H.bones.hips.position.y;
     H.bones.rightHand.add(H.sword);
     vrm.scene.updateMatrixWorld(true);
@@ -605,7 +657,7 @@ NPC.root.position.set(0,0,-14.0); scene.add(NPC.root); scene.add(NPC.look);
     H.vrm = vrm;
     // NPC: Ciel
     NPC.vrm = C.vrm; NPC.bones = C.bones; NPC.sign = C.sign; NPC.hipsY = C.bones.hips.position.y;
-    rimVRM(C.vrm, 1.3,.75,1.0); NPC.root.add(C.vrm.scene);
+    rimVRM(C.vrm, 1.1,.95,.6);   // 若い神官：金色の縁取り NPC.root.add(C.vrm.scene);
     if (C.vrm.lookAt) C.vrm.lookAt.target = NPC.look;
     heroReady = true;
     btn.disabled = false; btn2.disabled = false;
@@ -1358,7 +1410,7 @@ function headPos(bones, fallback){ return bones.head ? bones.head.getWorldPositi
 function shotTo(shot, snap){
   const hp = headPos(H.bones, hero.pos), np = headPos(NPC.bones, NPC.root.position);
   const face = (head, yaw, side) => { const f = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)), r = new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
-    camPos2.copy(head).addScaledVector(f, 1.15).addScaledVector(r, side).add(new THREE.Vector3(0,.04,0)); camLook2.copy(head).addScaledVector(r, -side*.25).add(new THREE.Vector3(0,-.06,0)); };
+    camPos2.copy(head).addScaledVector(f, 1.6).addScaledVector(r, side*.55).add(new THREE.Vector3(0,.03,0)); camLook2.copy(head).addScaledVector(r, -side*.1).add(new THREE.Vector3(0,-.1,0)); };   // 顔のアップ：近すぎると画面の端で切れるので1.6m
   if (shot==='lumina') face(hp, hero.facing, -.42);
   else if (shot==='ciel') face(np, NPC.root.rotation.y, .42);
   else if (shot==='two'){ const m = hp.clone().add(np).multiplyScalar(.5), d = np.clone().sub(hp); d.y = 0; d.normalize();
