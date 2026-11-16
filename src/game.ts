@@ -189,7 +189,19 @@ edge.rotation.x = -Math.PI/2; edge.position.y = 0.03; scene.add(edge);
 
 const stoneMat = new THREE.MeshStandardMaterial({...pbrMaps('marble_01', 1, 3), color:0xe8edf8, roughness:.55, metalness:0, envMapIntensity:.55});
 // 浮島の岩肌（広場の裏側・遠くの浮島）
-const rockMat = new THREE.MeshStandardMaterial({...pbrMaps('castle_wall_slates', 6, 2), color:0x9a958c, roughness:1, metalness:0, envMapIntensity:.6});
+const rockMat = new THREE.MeshStandardMaterial({...pbrMaps('namaqualand_cliff_01', 5, 2), color:0xd9d2c6, roughness:1, metalness:0, envMapIntensity:.6});
+// 浮島の岩塊：上が平らで下に向かって尖る形を、でこぼこに崩して作る（写真スキャンの崖の質感を貼る）
+function rockMass(rTop, height, seed=1){
+  const g = new THREE.CylinderGeometry(rTop, rTop*.12, height, 56, 18, true).translate(0, -height/2, 0);
+  const p = g.attributes.position, v = new THREE.Vector3();
+  for (let i=0;i<p.count;i++){
+    v.fromBufferAttribute(p, i); const a = Math.atan2(v.z, v.x), t = -v.y/height;          // t: 0=上端 1=下端
+    const n = Math.sin(a*5+seed)*.07 + Math.sin(a*13+seed*2+t*6)*.05 + Math.sin(a*29+t*17+seed)*.03 + Math.sin(t*9+seed)*.06;
+    const k = 1 + n*(.35 + t);                                                                // 下ほど荒々しく
+    p.setXYZ(i, v.x*k, v.y + Math.sin(a*7+seed)*height*.03*t, v.z*k);
+  }
+  g.computeVertexNormals(); return g;
+}
 const crystalMats = [new THREE.Color(0x57e1ff), new THREE.Color(0xc070ff)].map(c =>
   new THREE.MeshStandardMaterial({color:0x111122, emissive:c, emissiveIntensity:2.4, roughness:.2, metalness:.6, flatShading:true}));
 // 青地に白い星（風見の紋章）の旗。風が止まると垂れ下がって動かなくなる
@@ -221,8 +233,7 @@ const pl2 = new THREE.PointLight(0xc070ff, 8, 30, 2); pl2.position.set(-14,5,14)
 /* ================= 天空の聖都：雲海と浮島 =================
    広場そのものが空に浮かぶ島。足元には雲の海、遠くには白い塔の建つ浮島と、そこから落ちる滝。 */
 { // 広場の裏側の岩（浮いていることが分かるように）
-  const under = new THREE.Mesh(new THREE.CylinderGeometry(ARENA+8, ARENA-4, 9, 48, 1, true), rockMat); under.position.y = -4.5; scene.add(under);
-  const tip = new THREE.Mesh(new THREE.ConeGeometry(ARENA-4, 16, 48), rockMat); tip.rotation.x = Math.PI; tip.position.y = -17; scene.add(tip);
+  const under = new THREE.Mesh(rockMass(ARENA+8, 30, 2), rockMat); under.position.y = -.05; scene.add(under);
 }
 { // 広場の縁の白い欄干。手前（+z 側）は「門」として開けておく（⑦ 聖都を去る の行き先）
   const R = ARENA + .7, GAP = .16, white = new THREE.MeshStandardMaterial({color:0xf1f2f6, roughness:.55});
@@ -260,7 +271,7 @@ cloudSea.rotation.x = -Math.PI/2; cloudSea.position.y = -26; scene.add(cloudSea)
   const fallMat = new THREE.MeshBasicMaterial({map:fallTex, transparent:true, opacity:.75, depthWrite:false, side:THREE.DoubleSide});
   const island = (x, y, z, r, seed) => {
     const g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
-    const rock = new THREE.Mesh(new THREE.ConeGeometry(r, r*1.8, 9), rockMat); rock.rotation.x = Math.PI; rock.position.y = -r*.9; g.add(rock);
+    const rock = new THREE.Mesh(rockMass(r, r*1.9, seed), rockMat); g.add(rock);
     const top = new THREE.Mesh(new THREE.CylinderGeometry(r, r*.98, .6, 18), grass); top.position.y = .3; g.add(top);
     let rnd = seed; const R = () => (rnd = (rnd*9301 + 49297) % 233280) / 233280;
     for (let i=0;i<6;i++){   // 建物と尖塔
